@@ -16,7 +16,7 @@ class DummyLLMProvider(LLMProvider):
         return "This is a dummy response. The system retrieved evidence from the provided citations."
 
     def embed_text(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
-        return DummyEmbedder().embed(texts)
+        return DummyEmbedder().embed_text(texts)
 
 
 class OllamaQwenProvider(LLMProvider, Embedder):
@@ -60,6 +60,11 @@ class InMemoryVectorStore:
             distances.append((score, self.chunks[chunk_id]))
         distances.sort(key=lambda item: item[0], reverse=True)
         return [chunk for _, chunk in distances[:top_k]]
+
+    def remove(self, chunk_ids: Sequence[str]) -> None:
+        for chunk_id in chunk_ids:
+            self.embeddings.pop(chunk_id, None)
+            self.chunks.pop(chunk_id, None)
 
     def _cosine_similarity(self, a: Sequence[float], b: Sequence[float]) -> float:
         if not a or not b or len(a) != len(b):

@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .python-version
@@ -36,6 +37,40 @@ logs/
 *.log
 *.csv
 *.tsv
+*.secret
+*.creds
+*.credentials
+*.jwk
+*.vault
+
+# Local environment files and secrets
+.env
+.env.*
+.env.local
+.env.test
+.env.production
+.env.*.local
+
+# Cloud and provider credentials
+.aws/
+.azure/
+.gcloud/
+.google/
+.google-credentials.json
+service-account.json
+*.service-account.json
+
+# SSH and authentication
+.ssh/
+id_rsa
+id_ed25519
+id_dsa
+id_ecdsa
+known_hosts
+.netrc
+npm-debug.log
+.npmrc
+
 # Model artifacts and caches
 models/
 model_cache/
@@ -47,5 +82,3 @@ ollama_cache/
 # Ensure repository files are not ignored by mistake
 !README.md
 !pyproject.toml
-!tests/**
-!src/**

@@ -232,12 +232,20 @@ def compute_content_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def compute_path_hash(path: str) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        while chunk := handle.read(8192):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def make_document_id(source_id: str, filename: str) -> str:
     normalized = f"{source_id}:{filename}"
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def make_chunk_id(source_id: str, document_id: str, offset: int) -> str:
+def make_chunk_id(source_id: str = "", document_id: str = "", offset: int = 0) -> str:
     normalized = f"{source_id}:{document_id}:{offset}"
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 

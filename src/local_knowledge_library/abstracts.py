@@ -30,6 +30,10 @@ class VectorStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def remove(self, chunk_ids: Sequence[str]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def search(self, query_embedding: Sequence[float], top_k: int) -> Sequence[Chunk]:
         raise NotImplementedError
 

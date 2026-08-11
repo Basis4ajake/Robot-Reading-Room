@@ -25,7 +25,7 @@ def test_retriever_semantic_search():
             citation_id="cite-2",
         ),
     ]
-    embeddings = DummyEmbedder().embed([chunk.text for chunk in chunks])
+    embeddings = DummyEmbedder().embed_text([chunk.text for chunk in chunks])
     vector_store.add(chunks, embeddings)
     retriever = Retriever(vector_store=vector_store, embedder=DummyEmbedder(), debug=False)
     results = retriever.semantic_search("fox dog", top_k=2)

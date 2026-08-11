@@ -1,9 +1,10 @@
 import tempfile
 from pathlib import Path
 
-from local_knowledge_library.abstracts import DocumentLoader
+from local_knowledge_library.abstracts import Chunker, DocumentLoader
 from local_knowledge_library.ingestion import IngestionPipeline
 from local_knowledge_library.models import (
+    Chunk,
     DocumentMetadata,
     LibraryConfig,
     StructureMetadata,
@@ -47,19 +48,23 @@ def test_incremental_ingestion_detects_unchanged(tmp_path):
     config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(data_dir))
     library = KnowledgeLibrary.create(config)
     library.add_source(str(source_file))
+    class TestChunker(Chunker):
+        def chunk(self, document):
+            return [
+                Chunk(
+                    chunk_id="chunk-1",
+                    library_id=document.library_id,
+                    source_id=document.source_id,
+                    document_id=document.document_id,
+                    text=document.text or "",
+                    metadata={"source": document.filename},
+                    citation_id="cite-1",
+                )
+            ]
+
     pipeline = IngestionPipeline(
         loaders=[TextLoader()],
-        chunker=lambda document: [
-            __import__("local_knowledge_library.models").models.Chunk(
-                chunk_id="chunk-1",
-                library_id=document.library_id,
-                source_id=document.source_id,
-                document_id=document.document_id,
-                text=document.text or "",
-                metadata={"source": document.filename},
-                citation_id="cite-1",
-            )
-        ],
+        chunker=TestChunker(),
         embedder=DummyEmbedder(),
         vector_store=InMemoryVectorStore(),
     )

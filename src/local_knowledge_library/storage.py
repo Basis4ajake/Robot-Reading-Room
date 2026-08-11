@@ -13,7 +13,7 @@ from .models import (
     LibraryMetadata,
     SourceMetadata,
     Chunk,
-    compute_content_hash,
+    compute_path_hash,
     make_source_id,
 )
 
@@ -41,6 +41,28 @@ class KnowledgeLibrary:
         self.chunks: Dict[str, Chunk] = {}
         self.state = IngestionState(library_id=self.config.library_id)
 
+    def remove_document(self, document_id: str) -> None:
+        document = self.documents.pop(document_id, None)
+        if document is None:
+            return
+        self.state.documents.pop(document_id, None)
+        chunk_ids = [cid for cid, chunk in self.chunks.items() if chunk.document_id == document_id]
+        for chunk_id in chunk_ids:
+            self.chunks.pop(chunk_id, None)
+        self.metadata.document_count = len(self.documents)
+        self.metadata.chunk_count = len(self.chunks)
+
+    def remove_source(self, source_id: str) -> None:
+        if source_id not in self.sources:
+            return
+        source = self.sources.pop(source_id)
+        self.metadata.source_count = len(self.sources)
+        to_remove = [doc_id for doc_id, doc in self.documents.items() if doc.source_id == source_id]
+        for doc_id in to_remove:
+            self.remove_document(doc_id)
+        self.state.sources.pop(source.source_path, None)
+        self.persist()
+
         self.load_state()
         self.load_sources()
         self.load_documents()
@@ -64,7 +86,13 @@ class KnowledgeLibrary:
         library_dir = cls.library_path(config)
         if not library_dir.exists():
             raise FileNotFoundError(f"Library {config.library_id} does not exist at {library_dir}")
-        return cls(config, str(library_dir))
+        library = cls(config, str(library_dir))
+        library.load_meta()
+        library.load_sources()
+        library.load_documents()
+        library.load_chunks()
+        library.load_state()
+        return library
 
     def load_json(self, path: Path, default):
         if not path.exists():
@@ -116,7 +144,7 @@ class KnowledgeLibrary:
         source_id = make_source_id(normalized)
         filename = Path(normalized).name
         extension = Path(normalized).suffix.lower().lstrip(".")
-        content_hash = compute_content_hash(normalized)
+        content_hash = compute_path_hash(normalized)
         source = SourceMetadata(
             source_id=source_id,
             library_id=self.config.library_id,
@@ -126,20 +154,9 @@ class KnowledgeLibrary:
             content_hash=content_hash,
         )
         self.sources[source_id] = source
-        self.state.sources[normalized] = content_hash
         self.metadata.source_count = len(self.sources)
         self.persist()
         return source
-
-    def remove_source(self, source_id: str) -> None:
-        if source_id not in self.sources:
-            return
-        self.sources.pop(source_id)
-        self.metadata.source_count = len(self.sources)
-        to_remove = [doc_id for doc_id, doc in self.documents.items() if doc.source_id == source_id]
-        for doc_id in to_remove:
-            self.documents.pop(doc_id, None)
-        self.persist()
 
     def list_sources(self) -> List[SourceMetadata]:
         return list(self.sources.values())
