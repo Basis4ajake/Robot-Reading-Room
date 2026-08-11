@@ -3,6 +3,7 @@ from .ollama_providers import (
     DummyLLMProvider,
     InMemoryVectorStore,
     OllamaQwenProvider,
+    SqliteVectorStore,
     SimpleKeywordSearcher,
     DummyReranker,
 )
@@ -11,6 +12,7 @@ __all__ = [
     "DummyEmbedder",
     "DummyLLMProvider",
     "InMemoryVectorStore",
+    "SqliteVectorStore",
     "OllamaQwenProvider",
     "SimpleKeywordSearcher",
     "DummyReranker",

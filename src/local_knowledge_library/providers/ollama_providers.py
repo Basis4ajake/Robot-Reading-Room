@@ -4,6 +4,7 @@ import random
 from typing import Sequence
 
 from ..abstracts import Embedder, LLMProvider
+from ..models import Chunk
 
 
 class DummyEmbedder(Embedder):
@@ -20,27 +21,112 @@ class DummyLLMProvider(LLMProvider):
 
 
 class OllamaQwenProvider(LLMProvider, Embedder):
-    def __init__(self, model_name: str = "qwen-7b", embedding_model: str = "mpt-7b-instruct"):
+    def __init__(self, model_name: str = "qwen2:1.5b", embedding_model: str | None = None):
         self.model_name = model_name
-        self.embedding_model = embedding_model
+        self.embedding_model = embedding_model or model_name
 
     def generate(self, prompt: str, max_tokens: int = 512) -> str:
         try:
-            from ollama import Ollama
+            import ollama
         except ImportError as exc:
             raise RuntimeError("Ollama SDK is required for OllamaQwenProvider") from exc
-        client = Ollama()
-        response = client.create(model=self.model_name, prompt=prompt, max_tokens=max_tokens)
-        return response.text
+        try:
+            response = ollama.generate(model=self.model_name, prompt=prompt, max_tokens=max_tokens)
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to generate text from Ollama. Ensure Ollama is installed, running, and the model is available."
+            ) from exc
+        return getattr(response, "text", str(response))
 
     def embed_text(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
         try:
-            from ollama import Ollama
+            import ollama
         except ImportError as exc:
             raise RuntimeError("Ollama SDK is required for OllamaQwenProvider") from exc
-        client = Ollama()
-        embeddings = client.embeddings(model=self.embedding_model, input=list(texts))
-        return [item.embedding for item in embeddings]
+        try:
+            response = ollama.embed(model=self.embedding_model, input=list(texts))
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to embed text with Ollama. Ensure Ollama is started with embedding support and the model supports embedding."
+            ) from exc
+        if hasattr(response, "embeddings"):
+            return [list(item) for item in response.embeddings]
+        if hasattr(response, "embedding"):
+            return [list(response.embedding)]
+        raise RuntimeError("Ollama embed response did not contain expected embedding fields.")
+
+
+class SqliteVectorStore:
+    def __init__(self, db_path: str):
+        import sqlite3
+
+        from pathlib import Path
+
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vectors (
+                chunk_id TEXT PRIMARY KEY,
+                chunk_json TEXT NOT NULL,
+                embedding_json TEXT NOT NULL
+            )
+            """
+        )
+        self.conn.commit()
+
+    def add(self, chunks: Sequence["Chunk"], embeddings: Sequence[Sequence[float]]) -> None:
+        import json
+
+        with self.conn:
+            for chunk, vector in zip(chunks, embeddings):
+                self.conn.execute(
+                    "REPLACE INTO vectors (chunk_id, chunk_json, embedding_json) VALUES (?, ?, ?)",
+                    (chunk.chunk_id, json.dumps(chunk.to_dict(), ensure_ascii=False), json.dumps(vector, ensure_ascii=False)),
+                )
+
+    def search(self, query_embedding: Sequence[float], top_k: int) -> Sequence["Chunk"]:
+        import json
+
+        rows = self.conn.execute("SELECT chunk_json, embedding_json FROM vectors").fetchall()
+        scored: list[tuple[float, "Chunk"]] = []
+        for chunk_json, embedding_json in rows:
+            chunk = Chunk.from_dict(json.loads(chunk_json))
+            vector = json.loads(embedding_json)
+            score = self._cosine_similarity(query_embedding, vector)
+            scored.append((score, chunk))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [chunk for _, chunk in scored[:top_k]]
+
+    def remove(self, chunk_ids: Sequence[str]) -> None:
+        with self.conn:
+            for chunk_id in chunk_ids:
+                self.conn.execute("DELETE FROM vectors WHERE chunk_id = ?", (chunk_id,))
+
+    def close(self) -> None:
+        try:
+            self.conn.commit()
+        finally:
+            self.conn.close()
+
+    def __enter__(self) -> "SqliteVectorStore":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def _cosine_similarity(self, a: Sequence[float], b: Sequence[float]) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        norm_a = sum(x * x for x in a) ** 0.5
+        norm_b = sum(y * y for y in b) ** 0.5
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
 
 
 class InMemoryVectorStore:
