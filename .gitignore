@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.python-env
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+# Jupyter
+.ipynb_checkpoints
+# OS
+.DS_Store
+Thumbs.db
+# IDEs
+.vscode/
+.idea/
+# Local Knowledge Library data
+data/
+local_data/
+libraries/
+indexes/
+cache/
+logs/
+*.sqlite
+*.db
+# Sensitive and generated artifacts
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.log
+*.csv
+*.tsv
+# Model artifacts and caches
+models/
+model_cache/
+ollama_cache/
+# system files
+*.swp
+*~
+
+# Ensure repository files are not ignored by mistake
+!README.md
+!pyproject.toml
+!tests/**
+!src/**

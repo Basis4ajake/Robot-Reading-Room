@@ -1,0 +1,19 @@
+[project]
+name = "local-knowledge-library"
+version = "0.1.0"
+description = "A local-first modular Retrieval-Augmented Generation platform for isolated knowledge libraries."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PyPDF2>=3.0",
+    "ollama-sdk>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
