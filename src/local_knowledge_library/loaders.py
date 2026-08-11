@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, List
 
-from PyPDF2 import PdfReader
 
 from .abstracts import DocumentLoader
 from .models import DocumentMetadata, StructureMetadata
@@ -67,6 +66,10 @@ class PdfLoader(DocumentLoader):
 
     def load(self, source_path: str) -> Iterable[DocumentMetadata]:
         path = Path(source_path)
+        try:
+            from PyPDF2 import PdfReader
+        except Exception:
+            raise RuntimeError("PyPDF2 is required to load PDF files. Install it or use a non-PDF source.")
         reader = PdfReader(str(path))
         text_parts = []
         for page in reader.pages:
