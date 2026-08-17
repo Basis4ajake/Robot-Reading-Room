@@ -54,7 +54,7 @@ This repository is public-source friendly. All user library contents, extracted 
 2. Install dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -e ".[dev]"
 ```
 
 3. Create or open a library in code or with future CLI support.
