@@ -1,0 +1,110 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.python-env
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+# Python packaging / test / lint artifacts
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+# Jupyter
+.ipynb_checkpoints
+# OS
+.DS_Store
+Thumbs.db
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# Frontend / desktop shell (web UI, Tauri, Electron)
+node_modules/
+.next/
+.nuxt/
+.svelte-kit/
+out/
+frontend/dist/
+frontend/build/
+src-tauri/target/
+*.dmg
+*.msi
+*.AppImage
+# Local Knowledge Library data
+data/
+local_data/
+libraries/
+indexes/
+cache/
+logs/
+*.sqlite
+*.db
+# Sensitive and generated artifacts
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.log
+*.csv
+*.tsv
+*.secret
+*.creds
+*.credentials
+*.jwk
+*.vault
+
+# Local environment files and secrets
+.env
+.env.*
+.env.local
+.env.test
+.env.production
+.env.*.local
+
+# Cloud and provider credentials
+.aws/
+.azure/
+.gcloud/
+.google/
+.google-credentials.json
+service-account.json
+*.service-account.json
+
+# SSH and authentication
+.ssh/
+id_rsa
+id_ed25519
+id_dsa
+id_ecdsa
+known_hosts
+.netrc
+npm-debug.log
+.npmrc
+
+# Model artifacts and caches
+models/
+model_cache/
+ollama_cache/
+# system files
+*.swp
+*~
+
+# Ensure repository files are not ignored by mistake
+!README.md
+!pyproject.toml

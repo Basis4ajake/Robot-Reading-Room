@@ -1,0 +1,7 @@
+This is a short sample document for the Local Knowledge Library demo.
+
+It contains two paragraphs. The first paragraph introduces the demo.
+
+The second paragraph describes that the system can ingest files, chunk them, store embeddings, and answer queries using retrieved evidence.
+
+End of sample.
