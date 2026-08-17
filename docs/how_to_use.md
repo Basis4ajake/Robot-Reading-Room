@@ -12,7 +12,9 @@ This repository is an early MVP for a local, modular Retrieval-Augmented Generat
 - Incremental indexing by content hash
 - A local provider abstraction layer for loaders, chunkers, embedders, vector stores, and LLMs
 - Grounded answer generation with citation tracking
-- In-memory vector search for local testing
+- In-memory and persistent SQLite vector search
+- A FastAPI service layer exposing library management, ingestion, model listing, and chat over HTTP (see section 9)
+- Persistent per-library configuration (model choice, chunk settings)
 - Basic automated tests
 
 Planned future improvements are noted at the end of this document.
@@ -159,7 +161,54 @@ Each chunk retains provenance metadata such as:
 
 The system resolves citation identifiers into structured citation objects before passing them to the LLM.
 
-## 9. Debug Mode
+## 9. Running the API Server
+
+A FastAPI service wraps the library, registry, and QA pipeline so a GUI (or `curl`) can drive the system without writing Python.
+
+Start it with:
+
+```bash
+python -m local_knowledge_library.api
+```
+
+By default it binds to `127.0.0.1:8000` (local-only). Configure it with environment variables:
+
+- `LKL_DATA_DIR` — root directory for libraries (default `./data/libraries`)
+- `LKL_API_HOST` / `LKL_API_PORT` — bind address (default `127.0.0.1:8000`)
+- `LKL_FORCE_DUMMY` — set `true` to force the dummy embedder/LLM (useful without Ollama running)
+
+Key endpoints, all under `/api/v1`:
+
+- `GET /health` — server + Ollama reachability status
+- `GET /models` — locally pulled Ollama model tags (quantization is part of the tag, e.g. `qwen2:7b-q4_0`, so there's no separate quantize control)
+- `GET /libraries`, `POST /libraries`, `GET /libraries/{id}`, `PATCH /libraries/{id}`, `DELETE /libraries/{id}?confirm=true` — library lifecycle and per-library config (model, chunk size, top_k)
+- `GET /libraries/{id}/sources`, `POST /libraries/{id}/sources`, `DELETE /libraries/{id}/sources/{source_id}` — manage sources by local file path
+- `POST /libraries/{id}/ingest` — run incremental ingestion
+- `POST /libraries/{id}/chat` — ask a grounded question, returns the answer plus citations and retrieved chunks
+
+Example end-to-end session:
+
+```bash
+curl -X POST localhost:8000/api/v1/libraries \
+  -H "Content-Type: application/json" \
+  -d '{"library_id": "my-library", "name": "My Library"}'
+
+curl -X POST localhost:8000/api/v1/libraries/my-library/sources \
+  -H "Content-Type: application/json" \
+  -d '{"source_path": "/absolute/path/to/file.md"}'
+
+curl -X POST localhost:8000/api/v1/libraries/my-library/ingest
+
+curl -X POST localhost:8000/api/v1/libraries/my-library/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Summarize the document."}'
+```
+
+Per-library configuration (`llm_model`, `embedding_model`, `chunk_size`, `chunk_overlap`, `top_k`) now persists to `config.json` inside the library's data directory, so a library reopens with the same settings it was created or last updated with.
+
+Not yet implemented: streaming chat responses, authentication (fine for a single local user, not for anything exposed beyond localhost), and `ollama pull` model downloading through the API.
+
+## 10. Debug Mode
 
 A debug mode is available to inspect pipeline flow and detect which stage may be responsible for a weak answer.
 
@@ -171,7 +220,7 @@ Enable debug via configuration or constructor flags on the classes. In debug mod
 - prompt assembly
 - citation resolution
 
-## 10. Running Tests
+## 11. Running Tests
 
 Run the available tests with:
 
@@ -187,7 +236,7 @@ Current test coverage includes:
 - citation/provenance integrity
 - library persistence and isolation
 
-## 11. Work-in-Progress Notes
+## 12. Work-in-Progress Notes
 
 This guide is intentionally written as an incrementally updated document.
 
@@ -210,7 +259,7 @@ Future improvements planned for the next iterations:
 - Research workspace workflows
 - Evaluation and RAG benchmarking
 
-## 12. Contribution and Extension
+## 13. Contribution and Extension
 
 If you extend this project, follow these guidelines:
 

@@ -51,6 +51,8 @@ class LibraryConfig:
     chunk_overlap: int = 50
     top_k: int = 5
     debug: bool = False
+    llm_model: str = "qwen2:1.5b"
+    embedding_model: Optional[str] = None
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)

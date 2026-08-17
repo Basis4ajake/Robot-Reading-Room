@@ -23,6 +23,7 @@ class KnowledgeLibrary:
         self.config = config
         self.library_dir = Path(library_dir)
         self.library_dir.mkdir(parents=True, exist_ok=True)
+        self.config_path = self.library_dir / "config.json"
         self.meta_path = self.library_dir / "meta.json"
         self.sources_path = self.library_dir / "sources.json"
         self.documents_path = self.library_dir / "documents.json"
@@ -86,6 +87,10 @@ class KnowledgeLibrary:
         library_dir = cls.library_path(config)
         if not library_dir.exists():
             raise FileNotFoundError(f"Library {config.library_id} does not exist at {library_dir}")
+        config_path = library_dir / "config.json"
+        if config_path.exists():
+            with config_path.open("r", encoding="utf-8") as handle:
+                config = LibraryConfig.from_dict(json.load(handle))
         library = cls(config, str(library_dir))
         library.load_meta()
         library.load_sources()
@@ -93,6 +98,11 @@ class KnowledgeLibrary:
         library.load_chunks()
         library.load_state()
         return library
+
+    @classmethod
+    def open_by_id(cls, library_id: str, data_dir: str) -> "KnowledgeLibrary":
+        placeholder = LibraryConfig(library_id=library_id, name=library_id, data_dir=data_dir)
+        return cls.open(placeholder)
 
     def load_json(self, path: Path, default):
         if not path.exists():
@@ -130,7 +140,13 @@ class KnowledgeLibrary:
         if data:
             self.state = IngestionState.from_dict(data)
 
+    def load_config(self) -> None:
+        data = self.load_json(self.config_path, None)
+        if data:
+            self.config = LibraryConfig.from_dict(data)
+
     def persist(self) -> None:
+        self.save_json(self.config_path, self.config.to_dict())
         self.save_json(self.meta_path, self.metadata.to_dict())
         self.save_json(self.sources_path, [s.to_dict() for s in self.sources.values()])
         self.save_json(self.documents_path, {did: d.to_dict() for did, d in self.documents.items()})

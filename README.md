@@ -18,6 +18,7 @@ Local Knowledge Library is designed to let users create private, self-contained 
 
 ## Recent updates
 
+- Added a FastAPI service layer (`python -m local_knowledge_library.api`) exposing library management, ingestion, model listing, and chat over HTTP, plus persistent per-library configuration — the foundation the planned GUI control center will sit on.
 - Fixed incremental ingestion and source change detection so unchanged documents are skipped and deleted content is cleaned up.
 - Corrected `KnowledgeLibrary.open()` state loading and removed duplicate `remove_source()` behavior.
 - Added `src/local_knowledge_library/providers/__init__.py` for package imports.

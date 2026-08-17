@@ -11,6 +11,18 @@ ENV/
 env/
 .env
 .env.*
+# Python packaging / test / lint artifacts
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
 # Jupyter
 .ipynb_checkpoints
 # OS
@@ -19,6 +31,20 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+*.iml
+
+# Frontend / desktop shell (web UI, Tauri, Electron)
+node_modules/
+.next/
+.nuxt/
+.svelte-kit/
+out/
+frontend/dist/
+frontend/build/
+src-tauri/target/
+*.dmg
+*.msi
+*.AppImage
 # Local Knowledge Library data
 data/
 local_data/

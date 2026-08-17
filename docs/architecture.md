@@ -23,6 +23,15 @@
 - `src/local_knowledge_library/providers/ollama_providers.py`
   - Contains local Ollama provider adapters and a safe dummy fallback for testing.
 
+- `src/local_knowledge_library/providers/factory.py`
+  - Builds embedder/LLM providers from a `LibraryConfig`, falling back to dummy providers when Ollama is unavailable. Also lists locally pulled Ollama model tags.
+
+- `src/local_knowledge_library/registry.py`
+  - `LibraryRegistry` manages the set of libraries under a data directory: create, list, open, update config, delete.
+
+- `src/local_knowledge_library/api/`
+  - A FastAPI service exposing the library, ingestion, and QA layers over HTTP for a future GUI. `app.py` builds the app and owns an `AppState` (the registry plus a small cache of per-library vector store/retriever/QA instances). Routers live under `api/routers/`: `libraries`, `sources`, `chat`, `models`, `health`. Run with `python -m local_knowledge_library.api`.
+
 ## Data Directory
 
 The default local library directory is configured via `LKL_DATA_DIR`, typically `./data/libraries`.
@@ -31,6 +40,7 @@ Each library is isolated under:
 
 ```
 data/libraries/{library_id}/
+  config.json
   meta.json
   sources.json
   documents.json
@@ -38,6 +48,8 @@ data/libraries/{library_id}/
   indexes/
   source_files/
 ```
+
+`config.json` persists the library's `LibraryConfig` (model choice, chunk settings, top_k) so it survives across process restarts and API calls — it is the source of truth once a library has been created; `KnowledgeLibrary.open()` loads it and ignores an in-memory config passed by the caller.
 
 ## Provenance
 

@@ -24,34 +24,8 @@ from local_knowledge_library.ingestion import IngestionPipeline
 from local_knowledge_library.retrieval import Retriever
 from local_knowledge_library.query_planner import QueryPlanner
 from local_knowledge_library.qa import GroundedQA
-from local_knowledge_library.providers import (
-    OllamaQwenProvider,
-    DummyEmbedder,
-    DummyLLMProvider,
-    SqliteVectorStore,
-)
-
-
-def choose_embedder_and_llm(force_dummy: bool):
-    if force_dummy:
-        return DummyEmbedder(), DummyLLMProvider()
-
-    try:
-        # Try Ollama for both LLM and embeddings
-        ollama_provider = OllamaQwenProvider()
-        # quick check: try embedding a tiny string to validate embedding support
-        try:
-            _ = ollama_provider.embed_text(["ping"])
-        except Exception:
-            # fall back to dummy embedder while keeping Ollama as LLM if generate works
-            try:
-                _ = ollama_provider.generate("hello")
-                return DummyEmbedder(), ollama_provider
-            except Exception:
-                return DummyEmbedder(), DummyLLMProvider()
-        return ollama_provider, ollama_provider
-    except Exception:
-        return DummyEmbedder(), DummyLLMProvider()
+from local_knowledge_library.providers import SqliteVectorStore
+from local_knowledge_library.providers.factory import build_providers
 
 
 def ensure_library(config: LibraryConfig) -> KnowledgeLibrary:
@@ -80,7 +54,7 @@ def main():
     source = library.add_source(str(source_path))
 
     # Choose providers
-    embedder, llm_provider = choose_embedder_and_llm(args.force_dummy)
+    embedder, llm_provider = build_providers(config, force_dummy=args.force_dummy)
 
     # Vector DB path (inside library index dir)
     vector_db = library.index_dir / "vectors.db"
