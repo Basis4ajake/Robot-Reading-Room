@@ -67,7 +67,9 @@ function setupOne(input) {
     panel.hidden = false;
   }
 
-  input.addEventListener("focus", () => render(input.value));
+  // On focus, show the full list even if the field already has a value
+  // (e.g. the default model) - only narrow it once the user actually types.
+  input.addEventListener("focus", () => render(""));
   input.addEventListener("input", () => render(input.value));
   input.addEventListener("blur", () => {
     panel.hidden = true;
