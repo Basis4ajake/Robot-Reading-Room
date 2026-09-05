@@ -31,11 +31,11 @@ class LibraryRegistry:
         library_id: str,
         name: str,
         description: str = "",
-        chunk_size: int = 200,
-        chunk_overlap: int = 50,
-        top_k: int = 5,
+        chunk_size: int = 300,
+        chunk_overlap: int = 60,
+        top_k: int = 8,
         llm_model: str = "qwen2:1.5b",
-        embedding_model: Optional[str] = None,
+        embedding_model: Optional[str] = "nomic-embed-text",
     ) -> KnowledgeLibrary:
         config = LibraryConfig(
             library_id=library_id,

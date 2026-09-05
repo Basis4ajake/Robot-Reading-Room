@@ -47,12 +47,33 @@ class LibraryConfig:
     name: str
     description: str = ""
     data_dir: str = "./data/libraries"
-    chunk_size: int = 200
-    chunk_overlap: int = 50
-    top_k: int = 5
+    # Matches the GUI create-form's own defaults (commit 81d61c1) - chosen
+    # against measured context-window limits so a direct API/Postman call
+    # gets the same recommendation the GUI already steers toward, instead of
+    # a different, older value nobody explicitly chose.
+    chunk_size: int = 300
+    chunk_overlap: int = 60
+    top_k: int = 8
     debug: bool = False
     llm_model: str = "qwen2:1.5b"
-    embedding_model: Optional[str] = None
+    # Must be a real embedding-capable model, never None: an unset
+    # embedding_model makes OllamaQwenProvider default to llm_model, which
+    # for a chat-only model like qwen2:1.5b always fails and silently falls
+    # back to fake DummyEmbedder vectors (see project_embedding_bug_2026_09_05
+    # in memory). nomic-embed-text matches the GUI's own default.
+    embedding_model: Optional[str] = "nomic-embed-text"
+
+    def __post_init__(self) -> None:
+        # The dataclass default above only applies when embedding_model is
+        # OMITTED - an explicit None (an already-persisted config.json from
+        # before this default existed, or a direct API call passing
+        # "embedding_model": null) bypasses it entirely and reproduces the
+        # exact silent-DummyEmbedder-fallback bug this default exists to
+        # close. Normalize here so every construction path is covered
+        # (from_dict, the API layer, direct instantiation) regardless of
+        # whether the caller passed the field explicitly.
+        if not self.embedding_model:
+            self.embedding_model = "nomic-embed-text"
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
@@ -113,6 +134,13 @@ class DocumentMetadata:
     content_hash: str
     structure: StructureMetadata = field(default_factory=StructureMetadata)
     text: Optional[str] = None
+    # PDF only: non-empty-paragraph count per page, in reading order, so a
+    # chunker can attribute each chunk to its real page instead of the one
+    # page number `detect_structure` finds via a single whole-document regex
+    # search. Populated fresh by PdfLoader on every load; deliberately not
+    # persisted (excluded from to_dict/from_dict) since it's only needed
+    # within the ingest pass that just loaded this document.
+    page_boundaries: Optional[List[int]] = None
 
     def to_dict(self, include_text: bool = False) -> Dict:
         result = {
@@ -217,6 +245,12 @@ class IngestionState:
     library_id: str
     sources: Dict[str, str] = field(default_factory=dict)
     documents: Dict[str, str] = field(default_factory=dict)
+    embedding_signature: Optional[str] = None
+    # Same idea as embedding_signature, for the chunker: chunk_size/overlap
+    # only take effect on documents that actually get (re-)processed, so a
+    # config change with no content change would otherwise be silently
+    # ignored by incremental (hash-based) ingestion forever.
+    chunking_signature: Optional[str] = None
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
@@ -227,6 +261,8 @@ class IngestionState:
             library_id=data["library_id"],
             sources=data.get("sources", {}),
             documents=data.get("documents", {}),
+            embedding_signature=data.get("embedding_signature"),
+            chunking_signature=data.get("chunking_signature"),
         )
 
 

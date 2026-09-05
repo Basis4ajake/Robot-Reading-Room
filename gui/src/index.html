@@ -73,36 +73,38 @@
                 Chunk size
                 <button class="info-tip" data-tooltip="How much text gets grouped into one searchable piece when your documents are processed, measured in words. Smaller chunks are more precise but can lose surrounding context; larger chunks keep more context together but can be less precise."></button>
               </span>
-              <input name="chunk_size" type="number" value="200" min="1" required />
+              <input name="chunk_size" type="number" value="300" min="1" required />
             </label>
             <label>
               <span class="label-text">
                 Chunk overlap
                 <button class="info-tip" data-tooltip="How much text is repeated between one chunk and the next, measured in words. A bit of overlap helps make sure important information isn't cut off right at the boundary between two chunks."></button>
               </span>
-              <input name="chunk_overlap" type="number" value="50" min="0" required />
+              <input name="chunk_overlap" type="number" value="60" min="0" required />
             </label>
             <label>
               <span class="label-text">
                 Top K
                 <button class="info-tip" data-tooltip="How many of the most relevant chunks are pulled in to help answer your question. A higher number gives the AI more information to work with, but can also add less-relevant content and slow things down."></button>
               </span>
-              <input name="top_k" type="number" value="5" min="1" required />
+              <input name="top_k" type="number" value="8" min="1" required />
             </label>
           </div>
           <label>
             <span class="label-text">
               LLM model
               <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
+              <a class="model-browse-link" href="https://ollama.com/library" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
             </span>
-            <input name="llm_model" data-model-select value="qwen2:1.5b" required />
+            <input name="llm_model" data-model-select="llm" value="qwen2:1.5b" required />
           </label>
           <label>
             <span class="label-text">
               Embedding model
-              <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. all-minilm) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+              <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. nomic-embed-text) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+              <a class="model-browse-link" href="https://ollama.com/search?c=embedding" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
             </span>
-            <input name="embedding_model" value="all-minilm" required />
+            <input name="embedding_model" data-model-select="embedding" value="nomic-embed-text" required />
           </label>
 
           <div class="form-actions">
@@ -150,15 +152,17 @@
               <span class="label-text">
                 LLM model
                 <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
+                <a class="model-browse-link" href="https://ollama.com/library" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
               </span>
-              <input name="llm_model" data-model-select required />
+              <input name="llm_model" data-model-select="llm" required />
             </label>
             <label>
               <span class="label-text">
                 Embedding model
-                <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. all-minilm) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+                <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. nomic-embed-text) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+                <a class="model-browse-link" href="https://ollama.com/search?c=embedding" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
               </span>
-              <input name="embedding_model" required />
+              <input name="embedding_model" data-model-select="embedding" required />
             </label>
 
             <div class="form-actions">

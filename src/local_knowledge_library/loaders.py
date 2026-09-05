@@ -72,9 +72,18 @@ class PdfLoader(DocumentLoader):
             raise RuntimeError("PyPDF2 is required to load PDF files. Install it or use a non-PDF source.")
         reader = PdfReader(str(path))
         text_parts = []
+        page_boundaries = []
         for page in reader.pages:
             page_text = page.extract_text() or ""
             text_parts.append(page_text)
+            # Mirrors ParagraphChunker's own split/filter exactly, so summing
+            # these counts up to a given chunk index tells you which page
+            # that chunk came from. Splitting a "\n\n"-joined string on
+            # "\n\n" is equivalent to concatenating each part's own split
+            # (occurrences of the separator are found the same way either
+            # way), so this per-page count lines up with the chunks
+            # ParagraphChunker will later produce from the joined raw_text.
+            page_boundaries.append(len([p for p in page_text.split("\n\n") if p.strip()]))
         raw_text = "\n\n".join(text_parts)
         return [DocumentMetadata(
             source_id="",
@@ -92,4 +101,5 @@ class PdfLoader(DocumentLoader):
             content_hash="",
             structure=StructureMetadata(),
             text=raw_text,
+            page_boundaries=page_boundaries,
         )]

@@ -5,6 +5,7 @@ import { initChat } from "./chat.js";
 import { initTooltips } from "./tooltip.js";
 import { initModelSelects } from "./model-select.js";
 import { initTheme } from "./theme.js";
+import { initExternalLinks } from "./external-link.js";
 
 let serverStatusEl;
 let dataDirEl;
@@ -67,4 +68,5 @@ window.addEventListener("DOMContentLoaded", () => {
   initLibraries();
   initTooltips();
   initModelSelects();
+  initExternalLinks();
 });
