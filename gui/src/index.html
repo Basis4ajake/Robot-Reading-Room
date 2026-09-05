@@ -97,6 +97,13 @@
             </span>
             <input name="llm_model" data-model-select value="qwen2:1.5b" required />
           </label>
+          <label>
+            <span class="label-text">
+              Embedding model
+              <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. all-minilm) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+            </span>
+            <input name="embedding_model" value="all-minilm" required />
+          </label>
 
           <div class="form-actions">
             <button type="button" id="create-library-cancel">Cancel</button>
@@ -145,6 +152,13 @@
                 <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
               </span>
               <input name="llm_model" data-model-select required />
+            </label>
+            <label>
+              <span class="label-text">
+                Embedding model
+                <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. all-minilm) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+              </span>
+              <input name="embedding_model" required />
             </label>
 
             <div class="form-actions">

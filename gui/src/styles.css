@@ -199,15 +199,15 @@ button:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.1em;
-  height: 1.1em;
+  width: 1.4em;
+  height: 1.4em;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid #999;
-  background: none;
+  border: 1.5px solid #396cd8;
+  background-color: #eaf1fd;
   box-shadow: none;
-  color: #666;
-  font-size: 0.75em;
+  color: #396cd8;
+  font-size: 0.85em;
   font-weight: 700;
   line-height: 1;
   cursor: help;
@@ -471,8 +471,9 @@ button.danger {
   }
 
   .info-tip {
-    border-color: #777;
-    color: #bbb;
+    border-color: #7aa5e8;
+    background-color: #2a3550;
+    color: #9dc0f5;
   }
 
   .info-tip-bubble {
@@ -620,7 +621,6 @@ button.danger {
 [data-theme="bendy"] button {
   border: 3px solid var(--bt-ink);
   border-radius: 999px;
-  box-shadow: 4px 4px 0 var(--bt-ink);
   background-color: var(--bt-sunshine);
   color: var(--bt-ink);
   transition: transform 0.05s ease, box-shadow 0.05s ease;
@@ -697,7 +697,7 @@ button.danger {
 [data-theme="bendy"] .info-tip {
   border-color: var(--bt-ink);
   color: var(--bt-ink);
-  background-color: var(--bt-butter);
+  background-color: var(--bt-blue-fill);
 }
 
 [data-theme="bendy"] .info-tip-bubble {

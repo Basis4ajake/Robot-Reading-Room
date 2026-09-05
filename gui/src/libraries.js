@@ -85,6 +85,7 @@ async function handleCreateSubmit(event) {
     chunk_overlap: Number(formData.get("chunk_overlap")),
     top_k: Number(formData.get("top_k")),
     llm_model: formData.get("llm_model").trim(),
+    embedding_model: formData.get("embedding_model").trim(),
   };
 
   try {
@@ -110,6 +111,7 @@ async function openDetail(libraryId) {
     detailForm.elements.chunk_overlap.value = library.chunk_overlap;
     detailForm.elements.top_k.value = library.top_k;
     detailForm.elements.llm_model.value = library.llm_model;
+    detailForm.elements.embedding_model.value = library.embedding_model || "";
     detailSection.hidden = false;
     showSourcesFor(library.library_id);
     showChatFor(library.library_id);
@@ -139,6 +141,7 @@ async function handleUpdateSubmit(event) {
     chunk_overlap: Number(formData.get("chunk_overlap")),
     top_k: Number(formData.get("top_k")),
     llm_model: formData.get("llm_model").trim(),
+    embedding_model: formData.get("embedding_model").trim(),
   };
 
   try {
