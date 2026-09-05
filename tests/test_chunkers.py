@@ -49,6 +49,21 @@ def test_paragraph_chunker_handles_multi_paragraph_and_blank_pages():
     assert [c.metadata["page_number"] for c in chunks] == ["1", "1", "3"]
 
 
+def test_paragraph_chunker_warns_on_page_boundaries_desync(capsys):
+    # page_boundaries claims 2 paragraphs total, but the text only has 1 -
+    # PdfLoader and this method's split logic have desynced. Must still
+    # attribute something (best-effort) but warn loudly rather than silently
+    # misattribute with no indication anything is wrong.
+    document = _make_document("Only one paragraph.", page_boundaries=[2])
+
+    chunks = ParagraphChunker().chunk(document)
+
+    assert len(chunks) == 1  # best-effort: still produced a citable chunk
+    warning = capsys.readouterr().out
+    assert "WARNING" in warning
+    assert "page_boundaries" in warning
+
+
 def test_paragraph_chunker_falls_back_to_document_page_number_without_boundaries():
     text = "Only paragraph."
     document = _make_document(text, page_boundaries=None, page_number=42)
@@ -78,6 +93,34 @@ def test_paragraph_chunker_splits_oversized_paragraph_to_chunk_size():
         assert len(chunk.text.split()) <= 100
     # Overlap: the last 20 words of chunk 1 should equal the first 20 of chunk 2.
     assert chunks[0].text.split()[-20:] == chunks[1].text.split()[:20]
+
+
+def test_paragraph_chunker_clamps_overlap_that_would_overshoot_chunk_size():
+    # overlap >= chunk_size would otherwise collapse the sliding-window step
+    # to 1, exploding a paragraph into thousands of near-duplicate chunks.
+    document = _make_document(_words(500), page_boundaries=[1])
+    chunker = ParagraphChunker(chunk_size=100, chunk_overlap=300)
+
+    chunks = chunker.chunk(document)
+
+    # Clamped to overlap=chunk_size-1=99 -> step=1 is what we're guarding
+    # against, so assert it did NOT produce anywhere near one chunk per word.
+    assert len(chunks) < 20
+
+
+def test_paragraph_chunker_clamps_negative_overlap_to_avoid_dropping_words():
+    # A negative overlap would make step > chunk_size, silently skipping
+    # whole spans of text that never appear in any chunk.
+    document = _make_document(_words(1000), page_boundaries=[1])
+    chunker = ParagraphChunker(chunk_size=100, chunk_overlap=-50)
+
+    chunks = chunker.chunk(document)
+
+    covered_words: set[str] = set()
+    for chunk in chunks:
+        covered_words.update(chunk.text.split())
+    all_words = set(_words(1000).split())
+    assert covered_words == all_words
 
 
 def test_paragraph_chunker_attributes_all_sub_chunks_to_the_source_page():

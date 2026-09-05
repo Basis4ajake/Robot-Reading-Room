@@ -36,7 +36,16 @@ class FixedSizeChunker(Chunker):
     honors that contract. Left as-is rather than fixed, since fixing an
     unused class's behavior with no caller to verify it against isn't worth
     the risk of a silent latent bug; don't wire this in without addressing
-    the unit mismatch first."""
+    the unit mismatch first.
+
+    Also note: this stores overlap as `self.overlap`, not `self.chunk_overlap`
+    - ingestion.py's `_chunker_signature` reads `chunk_overlap` via getattr,
+    so wiring this in as-is would make an overlap-only config change on this
+    chunker silently invisible to the force-reprocess mechanism, reproducing
+    the exact stale-index bug class that mechanism exists to close. Rename
+    the attribute (or teach _chunker_signature both names) if this is ever
+    wired in.
+    """
 
     def __init__(self, chunk_size: int = 200, overlap: int = 50):
         self.chunk_size = chunk_size
@@ -94,7 +103,21 @@ class ParagraphChunker(Chunker):
         # When we know per-page paragraph counts (PDFs), attribute each chunk
         # to the page it actually came from instead of the single page number
         # detect_structure found via one regex search over the whole document.
-        lookup = _page_lookup(getattr(document, "page_boundaries", None))
+        page_boundaries = getattr(document, "page_boundaries", None)
+        if page_boundaries and sum(page_boundaries) != len(paragraphs):
+            # This invariant (PdfLoader's per-page split exactly mirroring
+            # this method's own split) is only enforced by the two staying in
+            # sync by inspection, not by any shared code or runtime check. A
+            # future edit to either could silently desync them - _page_lookup
+            # clamps any out-of-range index to the last page rather than
+            # erroring, so a desync would otherwise misattribute citations to
+            # the wrong page with no indication anything was wrong.
+            print(
+                f"[Chunker] WARNING: page_boundaries sum ({sum(page_boundaries)}) != "
+                f"paragraph count ({len(paragraphs)}) for document {document.document_id!r} - "
+                "page citations for this document may be misattributed."
+            )
+        lookup = _page_lookup(page_boundaries)
         chunks: List[Chunk] = []
         index = 0
         for paragraph_index, paragraph in enumerate(paragraphs):
@@ -122,7 +145,17 @@ class ParagraphChunker(Chunker):
         words = paragraph.split()
         if len(words) <= self.chunk_size:
             return [paragraph]
-        step = max(self.chunk_size - self.chunk_overlap, 1)
+        # Nothing validates chunk_overlap upstream (API schema, GUI, direct
+        # construction), so clamp defensively: negative overlap would make
+        # step overshoot chunk_size and silently skip whole spans of text
+        # (never embedded, never retrievable, no error anywhere). Capping at
+        # chunk_size - 1 alone isn't enough either - that still allows
+        # step=1, exploding a paragraph into thousands of near-duplicate
+        # one-word-shifted chunks. Cap at half of chunk_size instead: real
+        # overlap is meant to preserve continuity across a boundary, not
+        # approach a full duplicate of the previous chunk.
+        effective_overlap = max(0, min(self.chunk_overlap, self.chunk_size // 2))
+        step = self.chunk_size - effective_overlap
         pieces: List[str] = []
         start = 0
         while start < len(words):

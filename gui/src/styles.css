@@ -488,6 +488,10 @@ button.danger {
     color: #9dc0f5;
   }
 
+  .model-browse-link {
+    color: #9dc0f5;
+  }
+
   .info-tip-bubble {
     background-color: #0f0f0f;
     color: #f6f6f6;
@@ -710,6 +714,10 @@ button.danger {
   border-color: var(--bt-ink);
   color: var(--bt-ink);
   background-color: var(--bt-blue-fill);
+}
+
+[data-theme="bendy"] .model-browse-link {
+  color: var(--bt-ink);
 }
 
 [data-theme="bendy"] .info-tip-bubble {

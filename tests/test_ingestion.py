@@ -236,3 +236,60 @@ def test_ingestion_reprocesses_and_cleans_up_when_chunk_size_changes(tmp_path):
     result3 = big_chunks_pipeline.ingest(library)
     assert len(result3["skipped"]) == 1
     assert len(vector_store.chunks) == 1
+
+
+def test_ingestion_refuses_to_overwrite_real_vectors_with_a_transient_dummy_fallback(tmp_path):
+    """A library indexed with a real embedder, then hit by a transient
+    Ollama outage (build_providers() falls back to DummyEmbedder for this
+    runtime only), must not have its good vectors silently destroyed by the
+    force-reprocess mechanism treating the outage as a deliberate model
+    switch. Ingestion should refuse outright instead."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    source_file = tmp_path / "source.txt"
+    source_file.write_text("Hello outage test", encoding="utf-8")
+    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(data_dir))
+    library = KnowledgeLibrary.create(config)
+    library.add_source(str(source_file))
+
+    class TestChunker(Chunker):
+        def chunk(self, document):
+            return [
+                Chunk(
+                    chunk_id="chunk-1",
+                    library_id=document.library_id,
+                    source_id=document.source_id,
+                    document_id=document.document_id,
+                    text=document.text or "",
+                    metadata={"source": document.filename},
+                    citation_id="cite-1",
+                )
+            ]
+
+    vector_store = InMemoryVectorStore()
+
+    real_pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=TestChunker(),
+        embedder=_NamedEmbedder("nomic-embed-text"),
+        vector_store=vector_store,
+    )
+    real_pipeline.ingest(library)
+    assert library.state.embedding_signature == "nomic-embed-text"
+    vectors_before = dict(vector_store.embeddings)
+
+    outage_pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=TestChunker(),
+        embedder=DummyEmbedder(),
+        vector_store=vector_store,
+    )
+    try:
+        outage_pipeline.ingest(library)
+        assert False, "expected ingest() to refuse rather than re-embed with DummyEmbedder"
+    except RuntimeError as exc:
+        assert "DummyEmbedder" in str(exc)
+
+    # Nothing was touched: the real vectors and recorded signature survive.
+    assert library.state.embedding_signature == "nomic-embed-text"
+    assert vector_store.embeddings == vectors_before

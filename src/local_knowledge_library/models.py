@@ -63,6 +63,18 @@ class LibraryConfig:
     # in memory). nomic-embed-text matches the GUI's own default.
     embedding_model: Optional[str] = "nomic-embed-text"
 
+    def __post_init__(self) -> None:
+        # The dataclass default above only applies when embedding_model is
+        # OMITTED - an explicit None (an already-persisted config.json from
+        # before this default existed, or a direct API call passing
+        # "embedding_model": null) bypasses it entirely and reproduces the
+        # exact silent-DummyEmbedder-fallback bug this default exists to
+        # close. Normalize here so every construction path is covered
+        # (from_dict, the API layer, direct instantiation) regardless of
+        # whether the caller passed the field explicitly.
+        if not self.embedding_model:
+            self.embedding_model = "nomic-embed-text"
+
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
 

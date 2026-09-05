@@ -61,7 +61,7 @@ def main():
 
     # Build pipeline
     loaders = [TextLoader(), MarkdownLoader(), PdfLoader()]
-    chunker = ParagraphChunker()
+    chunker = ParagraphChunker(chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
 
     with SqliteVectorStore(str(vector_db)) as vector_store:
         pipeline = IngestionPipeline(loaders, chunker, embedder, vector_store, debug=True)

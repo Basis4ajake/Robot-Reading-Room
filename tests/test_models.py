@@ -6,6 +6,7 @@ from local_knowledge_library.models import (
     Citation,
     DocumentMetadata,
     IngestionState,
+    LibraryConfig,
     StructureMetadata,
     compute_content_hash,
     make_chunk_id,
@@ -43,6 +44,21 @@ def test_chunk_and_citation_provenance():
     assert citation.citation_id == "cite-1"
     assert citation.chunk_id == chunk.chunk_id
     assert citation.section == "Intro"
+
+
+def test_library_config_normalizes_explicit_none_embedding_model():
+    # The dataclass default only applies when the field is omitted - an
+    # already-persisted config.json with "embedding_model": null (from
+    # before this default existed) or a direct API POST with an explicit
+    # null must still be normalized, or it silently reproduces the original
+    # DummyEmbedder-fallback bug.
+    config = LibraryConfig(library_id="lib", name="Lib", embedding_model=None)
+    assert config.embedding_model == "nomic-embed-text"
+
+    from_disk = LibraryConfig.from_dict(
+        {"library_id": "lib", "name": "Lib", "embedding_model": None}
+    )
+    assert from_disk.embedding_model == "nomic-embed-text"
 
 
 def test_document_structure_metadata():

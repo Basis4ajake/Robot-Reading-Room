@@ -17,16 +17,48 @@ from ..models import Chunk
 # practice (denser than typical English's ~4), so this errs toward
 # overestimating tokens rather than under.
 _CHARS_PER_TOKEN_ESTIMATE = 2
+# A practical ceiling, not "the biggest any model supports" - llm_model is
+# freely user-selectable (curated presets go up to llama3.1:8b's 128k native
+# context), but this project's realistic RAG prompts don't need anywhere
+# near that, and requesting a huge context has real memory/latency cost
+# regardless of whether the model could technically serve it.
 _NUM_CTX_BUCKETS = (2048, 4096, 8192, 16384, 32768)
 
+_model_max_context_cache: dict[str, int] = {}
 
-def _estimate_num_ctx(prompt: str, max_tokens: int) -> int:
+
+def _model_max_context(model_name: str) -> int:
+    """Look up a model's real max context length via `ollama show`, so
+    _estimate_num_ctx never requests more than a small model (e.g.
+    phi3:mini) actually supports. Falls back to the largest bucket above if
+    the lookup fails for any reason (Ollama unreachable, unexpected SDK
+    response shape, model not pulled yet) - same conservative-but-not-fatal
+    posture as the rest of this fallback chain."""
+    if model_name in _model_max_context_cache:
+        return _model_max_context_cache[model_name]
+    fallback = _NUM_CTX_BUCKETS[-1]
+    try:
+        import ollama
+
+        modelinfo = getattr(ollama.show(model_name), "modelinfo", None) or {}
+        for key, value in modelinfo.items():
+            if key.endswith(".context_length"):
+                _model_max_context_cache[model_name] = int(value)
+                return _model_max_context_cache[model_name]
+    except Exception:
+        pass
+    _model_max_context_cache[model_name] = fallback
+    return fallback
+
+
+def _estimate_num_ctx(prompt: str, max_tokens: int, max_ctx: int = _NUM_CTX_BUCKETS[-1]) -> int:
     estimated_input_tokens = len(prompt) // _CHARS_PER_TOKEN_ESTIMATE
     needed = estimated_input_tokens + max_tokens + 256  # + safety margin
-    for bucket in _NUM_CTX_BUCKETS:
+    candidates = [bucket for bucket in _NUM_CTX_BUCKETS if bucket <= max_ctx] or [max_ctx]
+    for bucket in candidates:
         if needed <= bucket:
             return bucket
-    return _NUM_CTX_BUCKETS[-1]  # qwen2:1.5b's real architecture max (ollama show)
+    return max(candidates)  # needed exceeds every allowed bucket; best effort, capped at max_ctx
 
 
 class DummyEmbedder(Embedder):
@@ -53,10 +85,11 @@ class OllamaQwenProvider(LLMProvider, Embedder):
         except ImportError as exc:
             raise RuntimeError("Ollama SDK is required for OllamaQwenProvider") from exc
         try:
+            max_ctx = _model_max_context(self.model_name)
             response = ollama.generate(
                 model=self.model_name,
                 prompt=prompt,
-                options={"num_predict": max_tokens, "num_ctx": _estimate_num_ctx(prompt, max_tokens)},
+                options={"num_predict": max_tokens, "num_ctx": _estimate_num_ctx(prompt, max_tokens, max_ctx)},
             )
         except Exception as exc:
             raise RuntimeError(

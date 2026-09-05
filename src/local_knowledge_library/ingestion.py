@@ -16,6 +16,7 @@ from .models import (
     make_document_id,
     StructureMetadata,
 )
+from .providers.ollama_providers import DummyEmbedder
 from .storage import KnowledgeLibrary
 
 
@@ -70,6 +71,22 @@ class IngestionPipeline:
 
         current_embedding_signature = _embedder_signature(self.embedder)
         current_chunking_signature = _chunker_signature(self.chunker)
+
+        # A transient Ollama outage (or any other embed failure) makes
+        # build_providers() hand us a DummyEmbedder for THIS runtime - not a
+        # deliberate model change. Treating that the same as a real model
+        # switch would force-reprocess the whole library below and overwrite
+        # good vectors with fake ones: actively destructive, not just
+        # unhelpful, and worse than the pre-signature-tracking behavior this
+        # was meant to improve on. Refuse outright instead.
+        was_previously_real = library.state.embedding_signature not in (None, DummyEmbedder.__name__)
+        if isinstance(self.embedder, DummyEmbedder) and was_previously_real:
+            raise RuntimeError(
+                "Embedding is currently falling back to DummyEmbedder (Ollama unavailable, or "
+                f"the configured embedding model can't produce embeddings), but this library was "
+                f"previously indexed with a real model ({library.state.embedding_signature!r}). "
+                "Refusing to re-embed with fake vectors - fix Ollama/the embedding model and retry."
+            )
 
         embedding_changed = (
             library.state.embedding_signature is not None
