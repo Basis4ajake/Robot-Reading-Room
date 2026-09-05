@@ -18,7 +18,16 @@ def build_providers(config: LibraryConfig, force_dummy: bool = False) -> Tuple[E
     provider = OllamaQwenProvider(model_name=config.llm_model, embedding_model=config.embedding_model)
     try:
         provider.embed_text(["ping"])
-    except Exception:
+    except Exception as exc:
+        # Falling back to DummyEmbedder makes semantic search silently
+        # meaningless (fake vectors, not "no results") - this must never be
+        # quiet. See project_embedding_bug_2026_09_05 in memory: this exact
+        # silent fallback was the root cause of a real broken library.
+        print(
+            f"[Providers] WARNING: embedding with '{provider.embedding_model}' failed "
+            f"({exc}); falling back to DummyEmbedder. Semantic search for this library "
+            "will return meaningless results until this is fixed and re-ingested."
+        )
         try:
             provider.generate("hello")
             return DummyEmbedder(), provider

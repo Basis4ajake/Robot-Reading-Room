@@ -50,7 +50,7 @@ class AppState:
         vector_store = SqliteVectorStore(str(vector_db))
 
         loaders = [TextLoader(), MarkdownLoader(), PdfLoader()]
-        chunker = ParagraphChunker()
+        chunker = ParagraphChunker(chunk_size=library.config.chunk_size, chunk_overlap=library.config.chunk_overlap)
         pipeline = IngestionPipeline(
             loaders, chunker, embedder, vector_store, debug=library.config.debug
         )

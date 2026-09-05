@@ -13,7 +13,7 @@ class LibraryCreateRequest(BaseModel):
     chunk_overlap: int = 50
     top_k: int = 5
     llm_model: str = "qwen2:1.5b"
-    embedding_model: Optional[str] = None
+    embedding_model: Optional[str] = "nomic-embed-text"
 
 
 class LibraryUpdateRequest(BaseModel):

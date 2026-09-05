@@ -94,6 +94,7 @@
             <span class="label-text">
               LLM model
               <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
+              <a class="model-browse-link" href="https://ollama.com/library" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
             </span>
             <input name="llm_model" data-model-select="llm" value="qwen2:1.5b" required />
           </label>
@@ -101,6 +102,7 @@
             <span class="label-text">
               Embedding model
               <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. nomic-embed-text) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+              <a class="model-browse-link" href="https://ollama.com/search?c=embedding" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
             </span>
             <input name="embedding_model" data-model-select="embedding" value="nomic-embed-text" required />
           </label>
@@ -150,6 +152,7 @@
               <span class="label-text">
                 LLM model
                 <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
+                <a class="model-browse-link" href="https://ollama.com/library" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
               </span>
               <input name="llm_model" data-model-select="llm" required />
             </label>
@@ -157,6 +160,7 @@
               <span class="label-text">
                 Embedding model
                 <button class="info-tip" data-tooltip="A separate local Ollama model used only to turn your document chunks into searchable vectors, not to write answers. This must be a model that supports embeddings (e.g. nomic-embed-text) - most chat models like qwen2 do not, and using one here will silently produce meaningless search results."></button>
+                <a class="model-browse-link" href="https://ollama.com/search?c=embedding" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
               </span>
               <input name="embedding_model" data-model-select="embedding" required />
             </label>

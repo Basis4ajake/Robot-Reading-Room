@@ -194,6 +194,18 @@ button:active {
   gap: 0.4em;
 }
 
+.model-browse-link {
+  font-size: 0.8em;
+  font-weight: 400;
+  color: #396cd8;
+  text-decoration: none;
+}
+
+.model-browse-link:hover,
+.model-browse-link:focus-visible {
+  text-decoration: underline;
+}
+
 .info-tip {
   position: relative;
   display: inline-flex;
