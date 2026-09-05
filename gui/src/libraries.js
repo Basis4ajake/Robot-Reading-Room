@@ -1,5 +1,6 @@
 import { listLibraries, createLibrary, getLibrary, updateLibrary, deleteLibrary } from "./api.js";
 import { showSourcesFor, hideSources } from "./sources.js";
+import { showChatFor, hideChat } from "./chat.js";
 
 let listEl;
 let errorEl;
@@ -111,6 +112,7 @@ async function openDetail(libraryId) {
     detailForm.elements.llm_model.value = library.llm_model;
     detailSection.hidden = false;
     showSourcesFor(library.library_id);
+    showChatFor(library.library_id);
   } catch (err) {
     showError(`Could not open library "${libraryId}": ${err.message}`);
   }
@@ -121,6 +123,7 @@ function closeDetail() {
   detailForm.reset();
   delete detailForm.dataset.libraryId;
   hideSources();
+  hideChat();
 }
 
 async function handleUpdateSubmit(event) {

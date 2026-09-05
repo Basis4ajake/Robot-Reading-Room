@@ -1,6 +1,10 @@
 import { getHealth, getModels } from "./api.js";
 import { initLibraries } from "./libraries.js";
 import { initSources } from "./sources.js";
+import { initChat } from "./chat.js";
+import { initTooltips } from "./tooltip.js";
+import { initModelSelects } from "./model-select.js";
+import { initTheme } from "./theme.js";
 
 let serverStatusEl;
 let dataDirEl;
@@ -46,6 +50,8 @@ async function refreshStatus() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  initTheme();
+
   serverStatusEl = document.querySelector("#server-status");
   dataDirEl = document.querySelector("#data-dir");
   ollamaStatusEl = document.querySelector("#ollama-status");
@@ -57,5 +63,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   refreshStatus();
   initSources();
+  initChat();
   initLibraries();
+  initTooltips();
+  initModelSelects();
 });

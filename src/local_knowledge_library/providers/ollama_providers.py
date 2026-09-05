@@ -31,12 +31,14 @@ class OllamaQwenProvider(LLMProvider, Embedder):
         except ImportError as exc:
             raise RuntimeError("Ollama SDK is required for OllamaQwenProvider") from exc
         try:
-            response = ollama.generate(model=self.model_name, prompt=prompt, max_tokens=max_tokens)
+            response = ollama.generate(
+                model=self.model_name, prompt=prompt, options={"num_predict": max_tokens}
+            )
         except Exception as exc:
             raise RuntimeError(
                 "Failed to generate text from Ollama. Ensure Ollama is installed, running, and the model is available."
             ) from exc
-        return getattr(response, "text", str(response))
+        return getattr(response, "response", str(response))
 
     def embed_text(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
         try:

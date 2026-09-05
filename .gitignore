@@ -106,6 +106,9 @@ ollama_cache/
 *.swp
 *~
 
+# Local working docs (personal planning notes, not part of the repo)
+docs/review-repository-propose-enhancements-snug-sloth.md
+
 # Ensure repository files are not ignored by mistake
 !README.md
 !pyproject.toml

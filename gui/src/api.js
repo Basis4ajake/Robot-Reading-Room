@@ -77,3 +77,10 @@ export function ingestLibrary(libraryId) {
     method: "POST",
   });
 }
+
+export function sendChatMessage(libraryId, query) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/chat`, {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
+}

@@ -7,11 +7,11 @@ from local_knowledge_library.providers import OllamaQwenProvider
 def test_ollama_qwen_provider_generate_and_embed(monkeypatch):
     ollama_module = types.SimpleNamespace()
 
-    def fake_generate(model: str, prompt: str, max_tokens: int = 512):
+    def fake_generate(model: str, prompt: str, options: dict):
         assert model == "qwen2:1.5b"
         assert prompt == "Hello"
-        assert max_tokens == 16
-        return types.SimpleNamespace(text="generated response")
+        assert options == {"num_predict": 16}
+        return types.SimpleNamespace(response="generated response")
 
     def fake_embed(model: str, input):
         assert model == "qwen2:1.5b"
