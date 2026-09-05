@@ -76,6 +76,7 @@ logs/
 .env.test
 .env.production
 .env.*.local
+!.env.example
 
 # Cloud and provider credentials
 .aws/

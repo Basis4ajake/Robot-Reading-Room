@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robot Reading Room</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+      <h1>Robot Reading Room</h1>
+      <p class="subtitle">Local knowledge library control center</p>
+
+      <section class="status-card">
+        <div class="status-header">
+          <h2>Backend status</h2>
+          <button id="refresh-btn" type="button">Refresh</button>
+        </div>
+
+        <dl class="status-grid">
+          <dt>Server</dt>
+          <dd id="server-status">checking...</dd>
+
+          <dt>Data directory</dt>
+          <dd id="data-dir">-</dd>
+
+          <dt>Ollama</dt>
+          <dd id="ollama-status">-</dd>
+
+          <dt>Available models</dt>
+          <dd id="models-list">-</dd>
+        </dl>
+
+        <p id="error-msg" class="error" hidden></p>
+      </section>
+    </main>
+  </body>
+</html>

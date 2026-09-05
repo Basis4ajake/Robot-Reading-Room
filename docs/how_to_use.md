@@ -30,7 +30,7 @@ cp .env.example .env
 2. Install dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -e ".[dev]"
 ```
 
 3. Confirm that the local data directory is excluded from version control.
