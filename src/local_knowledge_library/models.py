@@ -47,9 +47,13 @@ class LibraryConfig:
     name: str
     description: str = ""
     data_dir: str = "./data/libraries"
-    chunk_size: int = 200
-    chunk_overlap: int = 50
-    top_k: int = 5
+    # Matches the GUI create-form's own defaults (commit 81d61c1) - chosen
+    # against measured context-window limits so a direct API/Postman call
+    # gets the same recommendation the GUI already steers toward, instead of
+    # a different, older value nobody explicitly chose.
+    chunk_size: int = 300
+    chunk_overlap: int = 60
+    top_k: int = 8
     debug: bool = False
     llm_model: str = "qwen2:1.5b"
     # Must be a real embedding-capable model, never None: an unset

@@ -6,6 +6,28 @@ from typing import Sequence
 from ..abstracts import Embedder, LLMProvider
 from ..models import Chunk
 
+# Ollama's own default num_ctx (4096, confirmed empirically on this project's
+# hardware/Ollama 0.32.7) is silently enforced via --context-shift: an
+# over-length prompt gets old tokens dropped rather than an error, not a
+# hard failure - so a growing RAG prompt (bigger chunk_size/top_k) can
+# silently lose earlier retrieved chunks with no warning. Sizing num_ctx from
+# the actual prompt at generate() time, rather than trusting the default,
+# closes that off. 2 chars/token is deliberately conservative: this
+# project's own chemistry-heavy content measured ~2.65 chars/token in
+# practice (denser than typical English's ~4), so this errs toward
+# overestimating tokens rather than under.
+_CHARS_PER_TOKEN_ESTIMATE = 2
+_NUM_CTX_BUCKETS = (2048, 4096, 8192, 16384, 32768)
+
+
+def _estimate_num_ctx(prompt: str, max_tokens: int) -> int:
+    estimated_input_tokens = len(prompt) // _CHARS_PER_TOKEN_ESTIMATE
+    needed = estimated_input_tokens + max_tokens + 256  # + safety margin
+    for bucket in _NUM_CTX_BUCKETS:
+        if needed <= bucket:
+            return bucket
+    return _NUM_CTX_BUCKETS[-1]  # qwen2:1.5b's real architecture max (ollama show)
+
 
 class DummyEmbedder(Embedder):
     def embed_text(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
@@ -32,7 +54,9 @@ class OllamaQwenProvider(LLMProvider, Embedder):
             raise RuntimeError("Ollama SDK is required for OllamaQwenProvider") from exc
         try:
             response = ollama.generate(
-                model=self.model_name, prompt=prompt, options={"num_predict": max_tokens}
+                model=self.model_name,
+                prompt=prompt,
+                options={"num_predict": max_tokens, "num_ctx": _estimate_num_ctx(prompt, max_tokens)},
             )
         except Exception as exc:
             raise RuntimeError(
