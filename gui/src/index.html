@@ -35,6 +35,96 @@
 
         <p id="error-msg" class="error" hidden></p>
       </section>
+
+      <section class="status-card">
+        <div class="status-header">
+          <h2>Libraries</h2>
+          <button id="new-library-btn" type="button">New Library</button>
+        </div>
+
+        <ul id="library-list" class="library-list"></ul>
+
+        <form id="create-library-form" class="library-form" hidden>
+          <h3>New library</h3>
+
+          <label>
+            Library ID
+            <input name="library_id" required pattern="[a-zA-Z0-9_-]+" title="Letters, numbers, hyphens, underscores only" />
+          </label>
+          <label>
+            Name
+            <input name="name" required />
+          </label>
+          <label>
+            Description
+            <textarea name="description" rows="2"></textarea>
+          </label>
+          <div class="form-row">
+            <label>
+              Chunk size
+              <input name="chunk_size" type="number" value="200" min="1" required />
+            </label>
+            <label>
+              Chunk overlap
+              <input name="chunk_overlap" type="number" value="50" min="0" required />
+            </label>
+            <label>
+              Top K
+              <input name="top_k" type="number" value="5" min="1" required />
+            </label>
+          </div>
+          <label>
+            LLM model
+            <input name="llm_model" value="qwen2:1.5b" required />
+          </label>
+
+          <div class="form-actions">
+            <button type="button" id="create-library-cancel">Cancel</button>
+            <button type="submit">Create</button>
+          </div>
+        </form>
+
+        <section id="library-detail" class="library-form" hidden>
+          <h3 id="library-detail-title">Library</h3>
+
+          <form id="library-detail-form">
+            <label>
+              Name
+              <input name="name" required />
+            </label>
+            <label>
+              Description
+              <textarea name="description" rows="2"></textarea>
+            </label>
+            <div class="form-row">
+              <label>
+                Chunk size
+                <input name="chunk_size" type="number" min="1" required />
+              </label>
+              <label>
+                Chunk overlap
+                <input name="chunk_overlap" type="number" min="0" required />
+              </label>
+              <label>
+                Top K
+                <input name="top_k" type="number" min="1" required />
+              </label>
+            </div>
+            <label>
+              LLM model
+              <input name="llm_model" required />
+            </label>
+
+            <div class="form-actions">
+              <button type="button" id="library-detail-delete" class="danger">Delete</button>
+              <button type="button" id="library-detail-close">Close</button>
+              <button type="submit">Save</button>
+            </div>
+          </form>
+        </section>
+
+        <p id="library-error-msg" class="error" hidden></p>
+      </section>
     </main>
   </body>
 </html>

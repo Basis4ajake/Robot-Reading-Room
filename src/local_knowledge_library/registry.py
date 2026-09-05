@@ -63,6 +63,10 @@ class LibraryRegistry:
         for key, value in fields.items():
             if value is not None:
                 setattr(library.config, key, value)
+        # name/description are duplicated on LibraryMetadata for list_libraries();
+        # keep it in sync so a rename is actually visible through the API.
+        library.metadata.name = library.config.name
+        library.metadata.description = library.config.description
         library.persist()
         return library
 

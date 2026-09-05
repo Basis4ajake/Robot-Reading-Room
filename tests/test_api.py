@@ -50,6 +50,19 @@ def test_library_lifecycle(client):
     assert update_response.status_code == 200
     assert update_response.json()["top_k"] == 3
 
+    rename_response = client.patch(
+        "/api/v1/libraries/test-lib", json={"name": "Renamed Library", "description": "updated"}
+    )
+    assert rename_response.status_code == 200
+    assert rename_response.json()["name"] == "Renamed Library"
+    assert rename_response.json()["description"] == "updated"
+
+    reget_response = client.get("/api/v1/libraries/test-lib")
+    assert reget_response.json()["name"] == "Renamed Library"
+
+    relist_response = client.get("/api/v1/libraries")
+    assert relist_response.json()[0]["name"] == "Renamed Library"
+
     missing_response = client.get("/api/v1/libraries/does-not-exist")
     assert missing_response.status_code == 404
 
