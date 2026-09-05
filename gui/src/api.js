@@ -53,3 +53,27 @@ export function deleteLibrary(libraryId) {
     method: "DELETE",
   });
 }
+
+export function listSources(libraryId) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/sources`);
+}
+
+export function addSource(libraryId, sourcePath) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/sources`, {
+    method: "POST",
+    body: JSON.stringify({ source_path: sourcePath }),
+  });
+}
+
+export function removeSource(libraryId, sourceId) {
+  return request(
+    `/libraries/${encodeURIComponent(libraryId)}/sources/${encodeURIComponent(sourceId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function ingestLibrary(libraryId) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/ingest`, {
+    method: "POST",
+  });
+}

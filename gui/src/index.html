@@ -121,6 +121,21 @@
               <button type="submit">Save</button>
             </div>
           </form>
+
+          <section id="sources-section" hidden>
+            <div class="status-header">
+              <h3>Sources</h3>
+              <div class="form-actions" style="margin-top: 0">
+                <button type="button" id="add-source-btn">Add file...</button>
+                <button type="button" id="ingest-btn">Ingest</button>
+              </div>
+            </div>
+
+            <ul id="source-list" class="library-list"></ul>
+
+            <p id="ingest-result" hidden></p>
+            <p id="sources-error-msg" class="error" hidden></p>
+          </section>
         </section>
 
         <p id="library-error-msg" class="error" hidden></p>

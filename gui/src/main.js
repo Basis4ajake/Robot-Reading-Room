@@ -1,5 +1,6 @@
 import { getHealth, getModels } from "./api.js";
 import { initLibraries } from "./libraries.js";
+import { initSources } from "./sources.js";
 
 let serverStatusEl;
 let dataDirEl;
@@ -55,5 +56,6 @@ window.addEventListener("DOMContentLoaded", () => {
   refreshBtn.addEventListener("click", refreshStatus);
 
   refreshStatus();
+  initSources();
   initLibraries();
 });

@@ -188,6 +188,17 @@ button.danger {
   margin-right: auto;
 }
 
+#sources-section {
+  margin-top: 1.5em;
+  padding-top: 1.5em;
+  border-top: 1px solid #eee;
+}
+
+#ingest-result {
+  margin-top: 1em;
+  color: #666;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
@@ -243,5 +254,13 @@ button.danger {
 
   button.danger {
     color: #ff8a80;
+  }
+
+  #sources-section {
+    border-top-color: #4a4a4a;
+  }
+
+  #ingest-result {
+    color: #bbb;
   }
 }

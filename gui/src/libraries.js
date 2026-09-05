@@ -1,4 +1,5 @@
 import { listLibraries, createLibrary, getLibrary, updateLibrary, deleteLibrary } from "./api.js";
+import { showSourcesFor, hideSources } from "./sources.js";
 
 let listEl;
 let errorEl;
@@ -109,6 +110,7 @@ async function openDetail(libraryId) {
     detailForm.elements.top_k.value = library.top_k;
     detailForm.elements.llm_model.value = library.llm_model;
     detailSection.hidden = false;
+    showSourcesFor(library.library_id);
   } catch (err) {
     showError(`Could not open library "${libraryId}": ${err.message}`);
   }
@@ -118,6 +120,7 @@ function closeDetail() {
   detailSection.hidden = true;
   detailForm.reset();
   delete detailForm.dataset.libraryId;
+  hideSources();
 }
 
 async function handleUpdateSubmit(event) {
