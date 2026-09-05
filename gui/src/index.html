@@ -2,6 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&family=Nunito:wght@700&family=Space+Mono:wght@700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Robot Reading Room</title>
@@ -10,6 +16,8 @@
 
   <body>
     <main class="container">
+      <button type="button" id="theme-toggle-btn" class="theme-toggle">Switch to Bendy Toon</button>
+
       <h1>Robot Reading Room</h1>
       <p class="subtitle">Local knowledge library control center</p>
 
@@ -61,21 +69,33 @@
           </label>
           <div class="form-row">
             <label>
-              Chunk size
+              <span class="label-text">
+                Chunk size
+                <button class="info-tip" data-tooltip="How much text gets grouped into one searchable piece when your documents are processed, measured in words. Smaller chunks are more precise but can lose surrounding context; larger chunks keep more context together but can be less precise."></button>
+              </span>
               <input name="chunk_size" type="number" value="200" min="1" required />
             </label>
             <label>
-              Chunk overlap
+              <span class="label-text">
+                Chunk overlap
+                <button class="info-tip" data-tooltip="How much text is repeated between one chunk and the next, measured in words. A bit of overlap helps make sure important information isn't cut off right at the boundary between two chunks."></button>
+              </span>
               <input name="chunk_overlap" type="number" value="50" min="0" required />
             </label>
             <label>
-              Top K
+              <span class="label-text">
+                Top K
+                <button class="info-tip" data-tooltip="How many of the most relevant chunks are pulled in to help answer your question. A higher number gives the AI more information to work with, but can also add less-relevant content and slow things down."></button>
+              </span>
               <input name="top_k" type="number" value="5" min="1" required />
             </label>
           </div>
           <label>
-            LLM model
-            <input name="llm_model" value="qwen2:1.5b" required />
+            <span class="label-text">
+              LLM model
+              <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
+            </span>
+            <input name="llm_model" data-model-select value="qwen2:1.5b" required />
           </label>
 
           <div class="form-actions">
@@ -98,21 +118,33 @@
             </label>
             <div class="form-row">
               <label>
-                Chunk size
+                <span class="label-text">
+                  Chunk size
+                  <button class="info-tip" data-tooltip="How much text gets grouped into one searchable piece when your documents are processed, measured in words. Smaller chunks are more precise but can lose surrounding context; larger chunks keep more context together but can be less precise."></button>
+                </span>
                 <input name="chunk_size" type="number" min="1" required />
               </label>
               <label>
-                Chunk overlap
+                <span class="label-text">
+                  Chunk overlap
+                  <button class="info-tip" data-tooltip="How much text is repeated between one chunk and the next, measured in words. A bit of overlap helps make sure important information isn't cut off right at the boundary between two chunks."></button>
+                </span>
                 <input name="chunk_overlap" type="number" min="0" required />
               </label>
               <label>
-                Top K
+                <span class="label-text">
+                  Top K
+                  <button class="info-tip" data-tooltip="How many of the most relevant chunks are pulled in to help answer your question. A higher number gives the AI more information to work with, but can also add less-relevant content and slow things down."></button>
+                </span>
                 <input name="top_k" type="number" min="1" required />
               </label>
             </div>
             <label>
-              LLM model
-              <input name="llm_model" required />
+              <span class="label-text">
+                LLM model
+                <button class="info-tip" data-tooltip="The local Ollama model used to generate chat answers. Smaller models (1-3B) reply faster and run fine on CPU; larger models (7B+) give better answers but are slower and often need a GPU to feel responsive. You can type any model name you've pulled with Ollama, or pick one of the suggestions."></button>
+              </span>
+              <input name="llm_model" data-model-select required />
             </label>
 
             <div class="form-actions">
@@ -135,6 +167,22 @@
 
             <p id="ingest-result" hidden></p>
             <p id="sources-error-msg" class="error" hidden></p>
+          </section>
+
+          <section id="chat-section" hidden>
+            <div class="status-header">
+              <h3>Chat</h3>
+              <span id="chat-demo-badge" class="badge" hidden>Demo mode</span>
+            </div>
+
+            <div id="chat-log" class="chat-log"></div>
+
+            <form id="chat-form" class="chat-form">
+              <input id="chat-input" type="text" placeholder="Ask a question about this library..." autocomplete="off" required />
+              <button type="submit" id="chat-submit-btn">Ask</button>
+            </form>
+
+            <p id="chat-error-msg" class="error" hidden></p>
           </section>
         </section>
 
