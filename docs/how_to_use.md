@@ -8,7 +8,7 @@ This repository is an early MVP for a local, modular Retrieval-Augmented Generat
 
 - Knowledge Library creation and management
 - Library isolation and local storage
-- Text, Markdown, and PDF ingestion (PDF via PyPDF2, with per-page citation tracking)
+- Text, Markdown, and PDF ingestion (PDF via `pypdf`, with per-page citation tracking)
 - Incremental indexing by content hash, with automatic detection/recovery if a library's embedding model or chunking configuration changes since it was last indexed
 - A local provider abstraction layer for loaders, chunkers, embedders, vector stores, and LLMs, backed by real local Ollama models (chat + embedding) with a dummy fallback for trying the app without Ollama running
 - Grounded answer generation with citation tracking, including accurate per-chunk page numbers for PDFs

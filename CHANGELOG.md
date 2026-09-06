@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (PDF extraction)
+
+### Changed
+- `PyPDF2` → `pypdf` (the actively maintained fork; identical API) for PDF loading. Tested first rather than assumed: compared `PyPDF2`, `pypdf`, and `PyMuPDF` on the same real scanned public-domain cookbook PDF and got character-for-character identical output from all three, including the real OCR corruption already baked into that PDF's text layer ("V4 teaspoon soda" for "¼", "egos" for "eggs"). No PDF library swap fixes bad source OCR, so `PyMuPDF` was not adopted (no evidence it helps, and it carries AGPL licensing this project hasn't evaluated) - the `pypdf` swap is justified purely as removing a dependency on an abandoned package.
+
+### Found (not yet fixed)
+- The same real-cookbook test surfaced a genuine Phase 6 failure mode: `recipe_extraction.segment_recipes`'s ALL-CAPS-heading heuristic finds zero real recipes and 123 false-positive "recipes" from OCR-garbled front matter on a real Title-Case-headed cookbook. Confirmed the segmentation approach only works for the one ALL-CAPS-convention book tested so far - see the plan doc's "PDF extraction quality" section for detail. Not fixed; needs a scope decision before this feature is safe to recommend on an arbitrary cookbook.
+
 ## [Unreleased] - 2026-09-05 (Phase 6, wired)
 
 ### Added

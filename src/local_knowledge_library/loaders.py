@@ -67,9 +67,9 @@ class PdfLoader(DocumentLoader):
     def load(self, source_path: str) -> Iterable[DocumentMetadata]:
         path = Path(source_path)
         try:
-            from PyPDF2 import PdfReader
+            from pypdf import PdfReader
         except Exception:
-            raise RuntimeError("PyPDF2 is required to load PDF files. Install it or use a non-PDF source.")
+            raise RuntimeError("pypdf is required to load PDF files. Install it or use a non-PDF source.")
         reader = PdfReader(str(path))
         text_parts = []
         page_boundaries = []
