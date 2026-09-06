@@ -7,11 +7,13 @@ let errorEl;
 let newBtn;
 let createForm;
 let createCancelBtn;
+let createSubmitBtn;
 let detailSection;
 let detailForm;
 let detailTitle;
 let detailCloseBtn;
 let detailDeleteBtn;
+let detailSaveBtn;
 
 function showError(message) {
   errorEl.textContent = message;
@@ -88,12 +90,18 @@ async function handleCreateSubmit(event) {
     embedding_model: formData.get("embedding_model").trim(),
   };
 
+  createSubmitBtn.disabled = true;
+  createSubmitBtn.textContent = "Creating...";
+
   try {
     await createLibrary(payload);
     hideCreateForm();
     await refreshList();
   } catch (err) {
     showError(`Could not create library: ${err.message}`);
+  } finally {
+    createSubmitBtn.disabled = false;
+    createSubmitBtn.textContent = "Create";
   }
 }
 
@@ -144,6 +152,9 @@ async function handleUpdateSubmit(event) {
     embedding_model: formData.get("embedding_model").trim(),
   };
 
+  detailSaveBtn.disabled = true;
+  detailSaveBtn.textContent = "Saving...";
+
   try {
     // config.json on disk is authoritative, so re-open the library with
     // the server's own response rather than trusting our local form state.
@@ -152,6 +163,9 @@ async function handleUpdateSubmit(event) {
     await refreshList();
   } catch (err) {
     showError(`Could not update library "${libraryId}": ${err.message}`);
+  } finally {
+    detailSaveBtn.disabled = false;
+    detailSaveBtn.textContent = "Save";
   }
 }
 
@@ -164,12 +178,18 @@ async function handleDelete() {
   );
   if (!confirmed) return;
 
+  detailDeleteBtn.disabled = true;
+  detailDeleteBtn.textContent = "Deleting...";
+
   try {
     await deleteLibrary(libraryId);
     closeDetail();
     await refreshList();
   } catch (err) {
     showError(`Could not delete library "${libraryId}": ${err.message}`);
+  } finally {
+    detailDeleteBtn.disabled = false;
+    detailDeleteBtn.textContent = "Delete";
   }
 }
 
@@ -179,11 +199,13 @@ export function initLibraries() {
   newBtn = document.querySelector("#new-library-btn");
   createForm = document.querySelector("#create-library-form");
   createCancelBtn = document.querySelector("#create-library-cancel");
+  createSubmitBtn = document.querySelector("#create-library-submit");
   detailSection = document.querySelector("#library-detail");
   detailForm = document.querySelector("#library-detail-form");
   detailTitle = document.querySelector("#library-detail-title");
   detailCloseBtn = document.querySelector("#library-detail-close");
   detailDeleteBtn = document.querySelector("#library-detail-delete");
+  detailSaveBtn = document.querySelector("#library-detail-save");
 
   newBtn.addEventListener("click", showCreateForm);
   createCancelBtn.addEventListener("click", hideCreateForm);
