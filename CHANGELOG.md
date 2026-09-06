@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (low-overhead bug sweep)
+
+### Fixed
+- `chunk_size`/`chunk_overlap`/`top_k` had no validation at the API boundary - `chunk_size <= 0` in particular was silently treated as "don't sub-split" rather than rejected (the GUI's own `min` attributes masked this for GUI users). Added Pydantic `Field(gt=0)`/`Field(ge=0)` constraints so the API now returns a clear `422` instead.
+- GUI error messages showed raw JSON (`{"detail":"..."}`, or a JSON array for validation errors) instead of the actual message. Added `describeErrorBody()` to extract it properly.
+
 ## [Unreleased] - 2026-09-06 (AppState concurrency locking)
 
 ### Fixed
