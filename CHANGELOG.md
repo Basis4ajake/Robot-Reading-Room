@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (second low-overhead sweep, fresh eyes)
+
+### Fixed
+- `SimpleKeywordSearcher.search()` scored every chunk identically - it counted query terms within the query text itself instead of the chunk text, so it never actually searched anything (would have silently done nothing the moment it was wired into hybrid search). Not currently used by the default pipeline, so dormant rather than user-visible, but had zero test coverage, which is exactly why it went unnoticed. Fixed and added `tests/test_keyword_searcher.py` (2 new tests, one of which would fail against the old code).
+
+95/95 tests passing.
+
 ## [Unreleased] - 2026-09-06 (low-overhead bug sweep)
 
 ### Fixed

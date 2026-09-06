@@ -227,10 +227,16 @@ class SimpleKeywordSearcher:
         self.chunks = list(chunks)
 
     def search(self, query: str, top_k: int) -> Sequence["Chunk"]:
-        lowercase = query.lower()
+        # Was counting query terms within the query itself, not the chunk
+        # text - every chunk scored identically and this never actually
+        # searched anything. Not currently wired into the default pipeline
+        # (see docs/how_to_use.md §13), so dormant rather than user-visible,
+        # but would have silently done nothing the moment it was wired in.
+        terms = query.lower().split()
         scored = []
         for chunk in self.chunks:
-            score = sum(lowercase.count(term) for term in lowercase.split())
+            chunk_text = chunk.text.lower()
+            score = sum(chunk_text.count(term) for term in terms)
             scored.append((score, chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
         return [chunk for _, chunk in scored[:top_k]]
