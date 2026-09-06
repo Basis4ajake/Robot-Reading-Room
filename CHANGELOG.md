@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (recipe segmentation hardened)
+
+### Fixed
+- `recipe_extraction.segment_recipes` found zero real recipes in a real Title-Case-headed cookbook (only recognized ALL-CAPS headings). Now case-agnostic: a heading is a short line (≤8 words) where every word is ALL-CAPS or Capitalized. Verified against a real book: "Doughnuts (Sour Milk)", "Spice Cakes", "Soft Gingerbread" now correctly found.
+- Rejects single-word candidates under 5 characters with no vowel, eliminating the OCR-noise false positives ("WIA", "AAT", "DREN") found in the same real book's garbled front matter, and rejects candidates containing a period or digit (also kills byline/ingredient-line false positives as a side effect).
+- Fixed a real regression the looser rule introduced: two different real patterns of adjacent heading-shaped lines (a title + parenthetical subtitle vs. a nested front-matter chain) need opposite tie-breaking (keep first vs. keep last name) - handled by treating parenthetical lines as pure separators that never rename the group. Caught by a test before shipping.
+- 6 new tests (19/19 in `test_recipe_extraction.py`, 79/79 full suite).
+
+### Known, not fixed
+- The same real book's badly-OCR'd front matter still produces ~600 false-positive segments from longer garbled tokens (5+ characters, contains a vowel) that pass the new noise filter. Reliably telling real English words from OCR gibberish needs a dictionary or language-model check, not another regex - flagged for a scope decision rather than chased with more tuning.
+
 ## [Unreleased] - 2026-09-06 (retrieval regression check)
 
 ### Added

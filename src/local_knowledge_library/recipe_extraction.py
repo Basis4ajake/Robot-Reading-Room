@@ -2,8 +2,10 @@
 
 Prototype for Phase 6 (see docs/review-repository-propose-enhancements-snug-sloth.md).
 Not wired into IngestionPipeline yet. `segment_recipes` is deliberately narrow:
-it only recognizes the "one ALL-CAPS heading per recipe" layout common in
-older/public-domain cookbooks, not prose documents in general.
+it recognizes "one short title line per recipe" layouts (both ALL-CAPS and
+Title Case, confirmed against two real books with different conventions),
+not prose documents in general or a title convention with lowercase
+connector words ("Soup of the Day") - not yet seen in a real test book.
 """
 from __future__ import annotations
 
@@ -15,9 +17,48 @@ from typing import List, Optional, Sequence
 from .abstracts import LLMProvider
 from .models import RecipeFact
 
-_HEADING_RE = re.compile(r"^[A-Z][A-Z '\"=.\-]{2,60}$")
 _MIN_SEGMENT_WORDS = 15
 _EXCERPT_LENGTH = 300
+
+# A heading candidate line must consist only of these characters - notably no
+# digits (measurement/ingredient lines) and no periods (bylines like
+# "Mrs. A. D. Savage.", abbreviations, sentence-ending prose).
+_ALLOWED_HEADING_CHARS_RE = re.compile(r"^[A-Za-z\s'\"()\-]+$")
+_MAX_HEADING_WORDS = 8
+# The shortest real single-word title seen in either confirmed test book
+# ("PASTE") is 5 characters. Below that, on real data, a single all-caps
+# token has only ever been OCR noise ("WIA", "AAT", "DREN", "NNN", ...).
+_MIN_SINGLE_WORD_HEADING_LENGTH = 5
+_VOWEL_RE = re.compile(r"[aeiouAEIOU]")
+
+
+def _looks_like_heading(line: str) -> bool:
+    """Case-agnostic structural heading check - a title is a short line where
+    every word is either ALL-CAPS or Capitalized (never a lowercase-led
+    word), which real recipe titles satisfy in both conventions confirmed so
+    far and ordinary prose/bylines/ingredient lines do not.
+    """
+    stripped = line.strip()
+    if not stripped or not _ALLOWED_HEADING_CHARS_RE.match(stripped):
+        return False
+
+    words = [w.strip("'\"") for w in re.split(r"[\s()\-]+", stripped) if w.strip("'\"")]
+    if not words or len(words) > _MAX_HEADING_WORDS:
+        return False
+
+    for word in words:
+        if not word[0].isupper():
+            return False
+        rest = word[1:]
+        if rest and not (rest.islower() or rest.isupper()):
+            return False
+
+    if len(words) == 1:
+        word = words[0]
+        if len(word) < _MIN_SINGLE_WORD_HEADING_LENGTH or not _VOWEL_RE.search(word):
+            return False
+
+    return True
 
 
 @dataclass
@@ -39,18 +80,55 @@ class RecipeFacts:
 
 
 def segment_recipes(text: str, min_segment_words: int = _MIN_SEGMENT_WORDS) -> List[RecipeSegment]:
-    """Split text into recipe-sized units at ALL-CAPS heading lines.
+    """Split text into recipe-sized units at short title lines (ALL-CAPS or
+    Title Case - see `_looks_like_heading`).
 
     Drops segments shorter than `min_segment_words` — in practice this is what
     filters out title-page fragments and back-of-book index entries, which are
     heading-shaped but not recipes.
     """
     lines = text.split("\n")
-    headings = [
+    raw_headings = [
         (i, line.strip())
         for i, line in enumerate(lines)
-        if _HEADING_RE.match(line.strip())
+        if _looks_like_heading(line)
     ]
+
+    # Accepting Title Case (needed for real books that don't use ALL-CAPS)
+    # also picks up two different real patterns where a heading-shaped line
+    # sits immediately under another one, with nothing but blank lines
+    # between them:
+    #   1. A parenthetical subtitle under a main title (e.g. an
+    #      Italian-language alt-name right below its English title) - the
+    #      FIRST (real) name should win, and the parenthetical line is pure
+    #      separator, never renaming the group.
+    #   2. A nesting chain (book title > section header > recipe title,
+    #      typically front-matter noise) - the LAST, most specific name
+    #      should win, since it's the one actually closest to the real body.
+    # Handle both by letting any non-parenthetical heading in a chain
+    # supersede an earlier name, while a parenthetical one only extends the
+    # chain without renaming it.
+    headings: List[tuple] = []
+    group_name: Optional[str] = None
+    group_body_start: Optional[int] = None
+    last_heading_line: Optional[int] = None
+    for start_line, name in raw_headings:
+        is_subtitle = name.startswith("(") and name.endswith(")")
+        if last_heading_line is not None:
+            between = lines[last_heading_line + 1 : start_line]
+            if not any(line.strip() for line in between):
+                last_heading_line = start_line
+                group_body_start = start_line
+                if not is_subtitle:
+                    group_name = name
+                continue
+        if group_name is not None:
+            headings.append((group_body_start, group_name))
+        group_name = name
+        group_body_start = start_line
+        last_heading_line = start_line
+    if group_name is not None:
+        headings.append((group_body_start, group_name))
 
     segments: List[RecipeSegment] = []
     for idx, (start_line, name) in enumerate(headings):
