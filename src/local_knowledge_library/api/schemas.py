@@ -14,6 +14,7 @@ class LibraryCreateRequest(BaseModel):
     top_k: int = 8
     llm_model: str = "qwen2:1.5b"
     embedding_model: Optional[str] = "nomic-embed-text"
+    enable_recipe_extraction: bool = False
 
 
 class LibraryUpdateRequest(BaseModel):
@@ -24,6 +25,7 @@ class LibraryUpdateRequest(BaseModel):
     top_k: Optional[int] = None
     llm_model: Optional[str] = None
     embedding_model: Optional[str] = None
+    enable_recipe_extraction: Optional[bool] = None
 
 
 class LibraryResponse(BaseModel):
@@ -38,6 +40,7 @@ class LibraryResponse(BaseModel):
     top_k: int
     llm_model: str
     embedding_model: Optional[str]
+    enable_recipe_extraction: bool
 
 
 class SourceAddRequest(BaseModel):

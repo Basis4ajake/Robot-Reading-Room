@@ -7,6 +7,7 @@ from local_knowledge_library.models import (
     DocumentMetadata,
     IngestionState,
     LibraryConfig,
+    RecipeFact,
     StructureMetadata,
     compute_content_hash,
     make_chunk_id,
@@ -59,6 +60,22 @@ def test_library_config_normalizes_explicit_none_embedding_model():
         {"library_id": "lib", "name": "Lib", "embedding_model": None}
     )
     assert from_disk.embedding_model == "nomic-embed-text"
+
+
+def test_library_config_defaults_recipe_extraction_off():
+    assert LibraryConfig(library_id="lib", name="Lib").enable_recipe_extraction is False
+
+
+def test_recipe_fact_roundtrip_and_ingredient_count():
+    fact = RecipeFact(
+        library_id="lib-1", source_id="src-1", document_id="doc-1",
+        recipe_name="Gnocchi", ingredients=["potatoes", "cheese", "eggs"],
+        step_count=3, source_excerpt="Prepare boiled potatoes...", page_number=42,
+    )
+    assert fact.ingredient_count == 3
+
+    restored = RecipeFact.from_dict(fact.to_dict())
+    assert restored == fact
 
 
 def test_document_structure_metadata():

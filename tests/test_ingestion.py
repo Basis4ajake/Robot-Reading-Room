@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 
@@ -293,3 +294,160 @@ def test_ingestion_refuses_to_overwrite_real_vectors_with_a_transient_dummy_fall
     # Nothing was touched: the real vectors and recorded signature survive.
     assert library.state.embedding_signature == "nomic-embed-text"
     assert vector_store.embeddings == vectors_before
+
+
+class _ScriptedRecipeLLM:
+    """Returns valid recipe-extraction JSON for every segment it's asked about."""
+
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
+        return json.dumps({"recipe_name": "Gnocchi", "ingredients": ["potatoes", "cheese"], "step_count": 2})
+
+    def embed_text(self, texts):
+        raise NotImplementedError
+
+
+_RECIPE_BOOK_TEXT = (
+    "GNOCCHI\n\n"
+    "Prepare a certain quantity of boiled potatoes and mix them with grated "
+    "cheese, salt and nutmeg then roll into little sticks and boil until "
+    "they float to the top of a pot of boiling salted water.\n"
+)
+
+
+def _make_recipe_library(tmp_path, enable_recipe_extraction: bool):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    source_file = tmp_path / "cookbook.txt"
+    source_file.write_text(_RECIPE_BOOK_TEXT, encoding="utf-8")
+    config = LibraryConfig(
+        library_id="test-lib",
+        name="Test",
+        data_dir=str(data_dir),
+        enable_recipe_extraction=enable_recipe_extraction,
+    )
+    library = KnowledgeLibrary.create(config)
+    library.add_source(str(source_file))
+    return library
+
+
+class _WholeDocChunker(Chunker):
+    def chunk(self, document):
+        return [
+            Chunk(
+                chunk_id="chunk-1",
+                library_id=document.library_id,
+                source_id=document.source_id,
+                document_id=document.document_id,
+                text=document.text or "",
+                metadata={"source": document.filename},
+                citation_id="cite-1",
+            )
+        ]
+
+
+def test_ingestion_persists_recipe_facts_when_extraction_enabled(tmp_path):
+    library = _make_recipe_library(tmp_path, enable_recipe_extraction=True)
+    pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=_WholeDocChunker(),
+        embedder=DummyEmbedder(),
+        vector_store=InMemoryVectorStore(),
+        llm_provider=_ScriptedRecipeLLM(),
+    )
+
+    pipeline.ingest(library)
+
+    facts = library.list_recipe_facts()
+    assert len(facts) == 1
+    assert facts[0].recipe_name == "Gnocchi"
+    assert facts[0].ingredients == ["potatoes", "cheese"]
+    assert facts[0].ingredient_count == 2
+    assert facts[0].step_count == 2
+    assert "boiled potatoes" in facts[0].source_excerpt
+
+    # Persists to disk and survives a reopen, like every other artifact.
+    reopened = KnowledgeLibrary.open(library.config)
+    reopened_facts = reopened.list_recipe_facts()
+    assert len(reopened_facts) == 1
+    assert reopened_facts[0].recipe_name == "Gnocchi"
+
+
+def test_ingestion_skips_recipe_extraction_when_disabled(tmp_path):
+    library = _make_recipe_library(tmp_path, enable_recipe_extraction=False)
+    pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=_WholeDocChunker(),
+        embedder=DummyEmbedder(),
+        vector_store=InMemoryVectorStore(),
+        llm_provider=_ScriptedRecipeLLM(),
+    )
+
+    pipeline.ingest(library)
+
+    assert library.list_recipe_facts() == []
+
+
+def test_ingestion_extracts_recipes_when_flag_is_toggled_on_after_first_ingest(tmp_path):
+    """Turning enable_recipe_extraction on for an already-ingested library
+    (unchanged content) must not be silently skipped by the unchanged-content
+    check - the same failure class embedding_signature/chunking_signature
+    already guard against."""
+    library = _make_recipe_library(tmp_path, enable_recipe_extraction=False)
+    vector_store = InMemoryVectorStore()
+    pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=_WholeDocChunker(),
+        embedder=DummyEmbedder(),
+        vector_store=vector_store,
+        llm_provider=_ScriptedRecipeLLM(),
+    )
+    pipeline.ingest(library)
+    assert library.list_recipe_facts() == []
+
+    library.config.enable_recipe_extraction = True
+    library.persist()
+    library.load_config()
+
+    pipeline.ingest(library)
+    facts = library.list_recipe_facts()
+    assert len(facts) == 1
+    assert facts[0].recipe_name == "Gnocchi"
+
+
+def test_ingestion_clears_recipe_facts_when_flag_is_toggled_off(tmp_path):
+    library = _make_recipe_library(tmp_path, enable_recipe_extraction=True)
+    vector_store = InMemoryVectorStore()
+    pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=_WholeDocChunker(),
+        embedder=DummyEmbedder(),
+        vector_store=vector_store,
+        llm_provider=_ScriptedRecipeLLM(),
+    )
+    pipeline.ingest(library)
+    assert len(library.list_recipe_facts()) == 1
+
+    library.config.enable_recipe_extraction = False
+    library.persist()
+
+    pipeline.ingest(library)
+    assert library.list_recipe_facts() == []
+
+
+def test_ingestion_does_not_force_reprocess_for_ordinary_libraries_that_never_enable_recipe_extraction(tmp_path):
+    """enable_recipe_extraction defaults to False for every library - a
+    missing/None recorded signature must NOT be treated as "unverified" the
+    way embedding/chunking signatures are, or every pre-existing library
+    would get an expensive forced full reprocess the first time this ships."""
+    library = _make_recipe_library(tmp_path, enable_recipe_extraction=False)
+    pipeline = IngestionPipeline(
+        loaders=[TextLoader()],
+        chunker=_WholeDocChunker(),
+        embedder=DummyEmbedder(),
+        vector_store=InMemoryVectorStore(),
+    )
+    pipeline.ingest(library)
+
+    result = pipeline.ingest(library)
+    assert len(result["skipped"]) == 1
+    assert len(result["processed"]) == 0

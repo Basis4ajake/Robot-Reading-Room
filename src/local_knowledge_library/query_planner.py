@@ -14,6 +14,20 @@ class RuleBasedQueryPlanner(QueryPlannerStrategy):
         lower = query.strip().lower()
         if any(token in lower for token in ["summarize", "summary", "summarization"]):
             return "summarization"
+        # Superlative/aggregate questions ("which recipe uses the fewest
+        # ingredients") need a real computation over structured facts, not
+        # similarity search - see recipe_extraction.interpret_aggregate_query,
+        # which GroundedQA actually branches on. This label is for
+        # transparency (shown in the prompt/response) so it isn't silently
+        # misreported as "lookup" like every other query shape here.
+        if any(
+            token in lower
+            for token in [
+                "fewest", "least", "simplest", "easiest", "cheapest", "most",
+                "highest", "lowest", "quickest", "fastest", "hardest",
+            ]
+        ):
+            return "aggregate_superlative"
         if any(token in lower for token in ["compare", "difference", "versus", "vs"]):
             return "comparison"
         if any(token in lower for token in ["synthesize", "synthesis", "combine", "integration"]):

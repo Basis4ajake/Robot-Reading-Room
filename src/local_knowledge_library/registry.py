@@ -36,6 +36,7 @@ class LibraryRegistry:
         top_k: int = 8,
         llm_model: str = "qwen2:1.5b",
         embedding_model: Optional[str] = "nomic-embed-text",
+        enable_recipe_extraction: bool = False,
     ) -> KnowledgeLibrary:
         config = LibraryConfig(
             library_id=library_id,
@@ -47,6 +48,7 @@ class LibraryRegistry:
             top_k=top_k,
             llm_model=llm_model,
             embedding_model=embedding_model,
+            enable_recipe_extraction=enable_recipe_extraction,
         )
         library = KnowledgeLibrary.create(config)
         library.persist()

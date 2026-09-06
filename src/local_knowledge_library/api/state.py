@@ -52,7 +52,7 @@ class AppState:
         loaders = [TextLoader(), MarkdownLoader(), PdfLoader()]
         chunker = ParagraphChunker(chunk_size=library.config.chunk_size, chunk_overlap=library.config.chunk_overlap)
         pipeline = IngestionPipeline(
-            loaders, chunker, embedder, vector_store, debug=library.config.debug
+            loaders, chunker, embedder, vector_store, debug=library.config.debug, llm_provider=llm_provider
         )
         retriever = Retriever(vector_store=vector_store, embedder=embedder, debug=library.config.debug)
         planner = QueryPlanner()

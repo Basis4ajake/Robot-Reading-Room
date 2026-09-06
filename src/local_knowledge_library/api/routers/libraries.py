@@ -24,6 +24,7 @@ def _to_response(library: KnowledgeLibrary) -> LibraryResponse:
         top_k=library.config.top_k,
         llm_model=library.config.llm_model,
         embedding_model=library.config.embedding_model,
+        enable_recipe_extraction=library.config.enable_recipe_extraction,
     )
 
 

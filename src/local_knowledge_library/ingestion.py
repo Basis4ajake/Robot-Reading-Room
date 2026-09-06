@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-from .abstracts import Chunker, DocumentLoader, Embedder, VectorStore
+from .abstracts import Chunker, DocumentLoader, Embedder, LLMProvider, VectorStore
 from .models import (
     Chunk,
     DocumentMetadata,
@@ -17,6 +17,7 @@ from .models import (
     StructureMetadata,
 )
 from .providers.ollama_providers import DummyEmbedder
+from .recipe_extraction import extract_recipe_facts, segment_recipes, to_recipe_fact
 from .storage import KnowledgeLibrary
 
 
@@ -42,6 +43,16 @@ def _chunker_signature(chunker: Chunker) -> str:
     return f"{type(chunker).__name__}:{chunk_size}:{chunk_overlap}"
 
 
+def _recipe_extraction_signature(enabled: bool) -> str:
+    """Same idea as _embedder_signature/_chunker_signature: toggling
+    enable_recipe_extraction doesn't change source content, so it needs its
+    own signature or hash-based incremental ingestion would silently ignore
+    the change forever. Versioned so a future change to the extraction logic
+    itself can also force reprocessing by bumping this string.
+    """
+    return "recipe_extraction:v1" if enabled else "disabled"
+
+
 class IngestionPipeline:
     def __init__(
         self,
@@ -50,12 +61,17 @@ class IngestionPipeline:
         embedder: Embedder,
         vector_store: VectorStore,
         debug: bool = False,
+        llm_provider: Optional[LLMProvider] = None,
     ):
         self.loaders = {ext: loader for loader in loaders for ext in loader.supported_extensions()}
         self.chunker = chunker
         self.embedder = embedder
         self.vector_store = vector_store
         self.debug = debug
+        # Only needed for recipe extraction (LibraryConfig.enable_recipe_extraction) -
+        # every other pipeline stage uses embedder/vector_store only. Optional so
+        # existing call sites that don't use that feature are unaffected.
+        self.llm_provider = llm_provider
 
     def get_loader_for_source(self, source_path: str) -> DocumentLoader:
         extension = Path(source_path).suffix.lower().lstrip(".")
@@ -71,6 +87,7 @@ class IngestionPipeline:
 
         current_embedding_signature = _embedder_signature(self.embedder)
         current_chunking_signature = _chunker_signature(self.chunker)
+        current_recipe_extraction_signature = _recipe_extraction_signature(library.config.enable_recipe_extraction)
 
         # A transient Ollama outage (or any other embed failure) makes
         # build_providers() hand us a DummyEmbedder for THIS runtime - not a
@@ -103,13 +120,28 @@ class IngestionPipeline:
             and library.state.chunking_signature != current_chunking_signature
         )
         chunking_unverified = library.state.chunking_signature is None and bool(library.state.documents)
-        force_reprocess = embedding_changed or embedding_unverified or chunking_changed or chunking_unverified
+        # Unlike embedding/chunking, "no recorded signature" here is the normal
+        # state for every library that has never touched this opt-in feature -
+        # NOT an unverified/unsafe state - so this only forces reprocessing on
+        # an actual change (including the initial off -> on transition), never
+        # merely because the library predates this tracking.
+        recipe_extraction_changed = (
+            (library.state.recipe_extraction_signature or "disabled") != current_recipe_extraction_signature
+        )
+        force_reprocess = (
+            embedding_changed
+            or embedding_unverified
+            or chunking_changed
+            or chunking_unverified
+            or recipe_extraction_changed
+        )
 
         if force_reprocess and self.debug:
             print(
-                "[Ingestion] embedding/chunking config changed or unverified "
+                "[Ingestion] embedding/chunking/recipe-extraction config changed or unverified "
                 f"(embedding: {library.state.embedding_signature!r} -> {current_embedding_signature!r}, "
-                f"chunking: {library.state.chunking_signature!r} -> {current_chunking_signature!r}); "
+                f"chunking: {library.state.chunking_signature!r} -> {current_chunking_signature!r}, "
+                f"recipe_extraction: {library.state.recipe_extraction_signature!r} -> {current_recipe_extraction_signature!r}); "
                 "forcing full re-embed/re-chunk"
             )
 
@@ -162,6 +194,20 @@ class IngestionPipeline:
                 library.register_document(document)
                 for chunk in chunks:
                     library.register_chunk(chunk)
+
+                if library.config.enable_recipe_extraction and self.llm_provider is not None:
+                    facts = self._extract_recipe_facts(document)
+                    library.register_recipe_facts(document.document_id, facts)
+                    if self.debug:
+                        print(f"[Ingestion] extracted {len(facts)} recipe(s) from {document.document_id}")
+                elif library.config.enable_recipe_extraction:
+                    library.register_recipe_facts(document.document_id, [])
+                    if self.debug:
+                        print(
+                            f"[Ingestion] recipe extraction enabled but no llm_provider configured - "
+                            f"skipping for {document.document_id}"
+                        )
+
                 processed.append(document.document_id)
                 if self.debug:
                     print(f"[Ingestion] ingested document {document.document_id} ({len(chunks)} chunks)")
@@ -178,12 +224,32 @@ class IngestionPipeline:
 
         library.state.embedding_signature = current_embedding_signature
         library.state.chunking_signature = current_chunking_signature
+        library.state.recipe_extraction_signature = current_recipe_extraction_signature
         library.persist()
         return {
             "processed": processed,
             "skipped": skipped,
             "removed": removed,
         }
+
+    def _extract_recipe_facts(self, document: DocumentMetadata) -> List:
+        segments = segment_recipes(document.text or "")
+        facts = []
+        for segment in segments:
+            extracted = extract_recipe_facts(segment, self.llm_provider)
+            if extracted is None:
+                continue
+            facts.append(
+                to_recipe_fact(
+                    segment,
+                    extracted,
+                    library_id=document.library_id,
+                    source_id=document.source_id,
+                    document_id=document.document_id,
+                    page_number=document.structure.page_number,
+                )
+            )
+        return facts
 
     def detect_structure(self, document: DocumentMetadata) -> StructureMetadata:
         if document.file_type in {"md", "markdown"} and document.text:

@@ -13,9 +13,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
 from .abstracts import LLMProvider
+from .models import RecipeFact
 
 _HEADING_RE = re.compile(r"^[A-Z][A-Z '\"=.\-]{2,60}$")
 _MIN_SEGMENT_WORDS = 15
+_EXCERPT_LENGTH = 300
 
 
 @dataclass
@@ -102,3 +104,81 @@ def extract_all(segments: Sequence[RecipeSegment], llm: LLMProvider) -> List[Rec
         if result is not None:
             facts.append(result)
     return facts
+
+
+def to_recipe_fact(
+    segment: RecipeSegment,
+    facts: RecipeFacts,
+    *,
+    library_id: str,
+    source_id: str,
+    document_id: str,
+    page_number: Optional[int] = None,
+) -> RecipeFact:
+    """Attach ingestion provenance to an extraction result for persistence."""
+    excerpt = segment.text[:_EXCERPT_LENGTH].strip()
+    if len(segment.text) > _EXCERPT_LENGTH:
+        excerpt += "..."
+    return RecipeFact(
+        library_id=library_id,
+        source_id=source_id,
+        document_id=document_id,
+        recipe_name=facts.recipe_name,
+        ingredients=facts.ingredients,
+        step_count=facts.step_count,
+        source_excerpt=excerpt,
+        page_number=page_number,
+    )
+
+
+@dataclass
+class AggregateQueryPlan:
+    """How to answer a superlative/aggregate recipe question from RecipeFact
+    data instead of vector search - see qa.py's GroundedQA._answer_aggregate_query.
+    """
+
+    answerable: bool
+    metric: Optional[str] = None  # "ingredient_count" | "step_count"
+    direction: Optional[str] = None  # "min" | "max"
+    reason: Optional[str] = None  # set when answerable is False, e.g. "cost_not_tracked"
+
+
+_COST_KEYWORDS = ("cheap", "cost", "price", "expensive", "afford", "budget")
+_MIN_KEYWORDS = (
+    "fewest", "least", "simplest", "simplify", "easiest", "easy",
+    "quickest", "quick", "fastest", "smallest", "lowest", "minimum", "shortest",
+)
+_MAX_KEYWORDS = ("most", "highest", "greatest", "largest", "maximum", "longest", "hardest", "most complex")
+_INGREDIENT_KEYWORDS = ("ingredient",)
+_STEP_KEYWORDS = ("step", "simplest", "simplify", "easiest", "easy", "quickest", "quick", "fastest", "hardest")
+
+
+def interpret_aggregate_query(query: str) -> Optional[AggregateQueryPlan]:
+    """Return None for queries that aren't a superlative/aggregate recipe
+    question at all (plain lookups should keep using vector search).
+
+    Requires an explicit superlative word (a _MIN_KEYWORDS/_MAX_KEYWORDS hit,
+    or a cost keyword) to trigger at all - a plain mention of "ingredients" or
+    "steps" with no superlative (e.g. "what ingredients are in the risotto?")
+    must NOT be misrouted here; those words only pick which metric to use
+    once a superlative has already been detected.
+    """
+    lower = query.strip().lower()
+
+    if any(keyword in lower for keyword in _COST_KEYWORDS):
+        return AggregateQueryPlan(answerable=False, reason="cost_not_tracked")
+
+    direction = None
+    if any(keyword in lower for keyword in _MIN_KEYWORDS):
+        direction = "min"
+    elif any(keyword in lower for keyword in _MAX_KEYWORDS):
+        direction = "max"
+
+    if direction is None:
+        return None
+
+    metric = "ingredient_count" if any(keyword in lower for keyword in _INGREDIENT_KEYWORDS) else None
+    if metric is None and any(keyword in lower for keyword in _STEP_KEYWORDS):
+        metric = "step_count"
+
+    return AggregateQueryPlan(answerable=True, metric=metric or "ingredient_count", direction=direction)

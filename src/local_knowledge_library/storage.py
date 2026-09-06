@@ -11,6 +11,7 @@ from .models import (
     IngestionState,
     LibraryConfig,
     LibraryMetadata,
+    RecipeFact,
     SourceMetadata,
     Chunk,
     compute_path_hash,
@@ -28,6 +29,7 @@ class KnowledgeLibrary:
         self.sources_path = self.library_dir / "sources.json"
         self.documents_path = self.library_dir / "documents.json"
         self.chunks_path = self.library_dir / "chunks.json"
+        self.recipe_facts_path = self.library_dir / "recipe_facts.json"
         self.state_path = self.library_dir / "state.json"
         self.index_dir = self.library_dir / "indexes"
         self.index_dir.mkdir(parents=True, exist_ok=True)
@@ -40,6 +42,7 @@ class KnowledgeLibrary:
         self.sources: Dict[str, SourceMetadata] = {}
         self.documents: Dict[str, DocumentMetadata] = {}
         self.chunks: Dict[str, Chunk] = {}
+        self.recipe_facts: Dict[str, List[RecipeFact]] = {}
         self.state = IngestionState(library_id=self.config.library_id)
 
     def remove_document(self, document_id: str) -> None:
@@ -50,6 +53,7 @@ class KnowledgeLibrary:
         chunk_ids = [cid for cid, chunk in self.chunks.items() if chunk.document_id == document_id]
         for chunk_id in chunk_ids:
             self.chunks.pop(chunk_id, None)
+        self.recipe_facts.pop(document_id, None)
         self.metadata.document_count = len(self.documents)
         self.metadata.chunk_count = len(self.chunks)
 
@@ -68,6 +72,7 @@ class KnowledgeLibrary:
         self.load_sources()
         self.load_documents()
         self.load_chunks()
+        self.load_recipe_facts()
         self.load_meta()
 
     @staticmethod
@@ -96,6 +101,7 @@ class KnowledgeLibrary:
         library.load_sources()
         library.load_documents()
         library.load_chunks()
+        library.load_recipe_facts()
         library.load_state()
         return library
 
@@ -135,6 +141,11 @@ class KnowledgeLibrary:
         for chunk_id, entry in data.items():
             self.chunks[chunk_id] = Chunk.from_dict(entry)
 
+    def load_recipe_facts(self) -> None:
+        data = self.load_json(self.recipe_facts_path, {})
+        for document_id, entries in data.items():
+            self.recipe_facts[document_id] = [RecipeFact.from_dict(entry) for entry in entries]
+
     def load_state(self) -> None:
         data = self.load_json(self.state_path, None)
         if data:
@@ -151,6 +162,10 @@ class KnowledgeLibrary:
         self.save_json(self.sources_path, [s.to_dict() for s in self.sources.values()])
         self.save_json(self.documents_path, {did: d.to_dict() for did, d in self.documents.items()})
         self.save_json(self.chunks_path, {cid: c.to_dict() for cid, c in self.chunks.items()})
+        self.save_json(
+            self.recipe_facts_path,
+            {did: [f.to_dict() for f in facts] for did, facts in self.recipe_facts.items()},
+        )
         self.save_json(self.state_path, self.state.to_dict())
 
     def add_source(self, source_path: str) -> SourceMetadata:
@@ -185,6 +200,12 @@ class KnowledgeLibrary:
     def register_chunk(self, chunk: Chunk) -> None:
         self.chunks[chunk.chunk_id] = chunk
         self.metadata.chunk_count = len(self.chunks)
+
+    def register_recipe_facts(self, document_id: str, facts: List[RecipeFact]) -> None:
+        self.recipe_facts[document_id] = facts
+
+    def list_recipe_facts(self) -> List[RecipeFact]:
+        return [fact for facts in self.recipe_facts.values() for fact in facts]
 
     def get_chunk(self, chunk_id: str) -> Optional[Chunk]:
         return self.chunks.get(chunk_id)

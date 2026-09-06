@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-05 (Phase 6, wired)
+
+### Added
+- `LibraryConfig.enable_recipe_extraction` (opt-in per library, default off) wires the Phase 6 prototype into the real pipeline: `IngestionPipeline` now extracts and persists structured recipe facts (`RecipeFact`, `recipe_facts.json`) during ingestion when enabled, tracked with its own `recipe_extraction_signature` (same pattern as `embedding_signature`/`chunking_signature`, so toggling the flag on an already-ingested library actually takes effect on the next ingest instead of being silently skipped).
+- `GroundedQA.answer_query` now answers superlative/aggregate recipe questions ("which recipe uses the fewest ingredients") from a real Python MIN/MAX over `RecipeFact` data instead of vector search — the actual fix for the gap `RuleBasedQueryPlanner`'s "comparison"/"synthesis" labels never closed. Cost/price questions get an explicit refusal instead of a fabricated answer, since cost isn't in the source text. Verified end-to-end against a real cookbook excerpt and live Ollama: correct answers, correct refusal, and correctly did NOT misroute a plain "what ingredients are in X" lookup question (a real false-positive caught and fixed during testing).
+- 23 new tests across `test_recipe_extraction.py`, `test_ingestion.py`, `test_qa.py`, `test_models.py`, `test_storage.py`, and new `test_query_planner.py`. 74/74 passing.
+
 ## [Unreleased] - 2026-09-05 (Phase 6, prototype)
 
 ### Added

@@ -2,10 +2,13 @@ import json
 
 from local_knowledge_library.abstracts import LLMProvider
 from local_knowledge_library.recipe_extraction import (
+    RecipeFacts,
     RecipeSegment,
     extract_all,
     extract_recipe_facts,
+    interpret_aggregate_query,
     segment_recipes,
+    to_recipe_fact,
 )
 
 
@@ -111,3 +114,65 @@ def test_extract_all_skips_failures_and_keeps_successes():
 
     assert len(facts) == 1
     assert facts[0].recipe_name == "B"
+
+
+def test_to_recipe_fact_attaches_provenance_and_excerpt():
+    segment = RecipeSegment(name="GNOCCHI", text="boiled potatoes and cheese " * 5, start_line=3)
+    facts = RecipeFacts(recipe_name="Gnocchi", ingredients=["potatoes", "cheese"], step_count=2)
+
+    record = to_recipe_fact(
+        segment, facts, library_id="lib-1", source_id="src-1", document_id="doc-1", page_number=7
+    )
+
+    assert record.library_id == "lib-1"
+    assert record.source_id == "src-1"
+    assert record.document_id == "doc-1"
+    assert record.recipe_name == "Gnocchi"
+    assert record.ingredients == ["potatoes", "cheese"]
+    assert record.ingredient_count == 2
+    assert record.page_number == 7
+    assert "boiled potatoes" in record.source_excerpt
+
+
+def test_to_recipe_fact_truncates_long_segments_with_ellipsis():
+    long_text = "word " * 200
+    segment = RecipeSegment(name="LONG", text=long_text, start_line=0)
+    facts = RecipeFacts(recipe_name="Long", ingredients=[], step_count=1)
+
+    record = to_recipe_fact(segment, facts, library_id="l", source_id="s", document_id="d")
+
+    assert len(record.source_excerpt) < len(long_text)
+    assert record.source_excerpt.endswith("...")
+    assert record.page_number is None
+
+
+def test_interpret_aggregate_query_detects_fewest_ingredients():
+    plan = interpret_aggregate_query("Which recipe uses the fewest ingredients?")
+    assert plan.answerable is True
+    assert plan.metric == "ingredient_count"
+    assert plan.direction == "min"
+
+
+def test_interpret_aggregate_query_detects_most_ingredients():
+    plan = interpret_aggregate_query("Which recipe has the most ingredients?")
+    assert plan.answerable is True
+    assert plan.metric == "ingredient_count"
+    assert plan.direction == "max"
+
+
+def test_interpret_aggregate_query_maps_simplest_to_fewest_steps():
+    plan = interpret_aggregate_query("Which recipe is simplest?")
+    assert plan.answerable is True
+    assert plan.metric == "step_count"
+    assert plan.direction == "min"
+
+
+def test_interpret_aggregate_query_flags_cost_as_unanswerable():
+    plan = interpret_aggregate_query("Which recipe is cheapest to make?")
+    assert plan.answerable is False
+    assert plan.reason == "cost_not_tracked"
+
+
+def test_interpret_aggregate_query_returns_none_for_plain_lookup():
+    assert interpret_aggregate_query("What ingredients are in the risotto recipe?") is None
+    assert interpret_aggregate_query("How do I make gnocchi?") is None

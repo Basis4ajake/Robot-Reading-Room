@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import List
 
 from .abstracts import LLMProvider
-from .models import Citation, Chunk
+from .models import Citation, Chunk, RecipeFact
 from .query_planner import QueryPlanner
+from .recipe_extraction import AggregateQueryPlan, interpret_aggregate_query
 from .retrieval import Retriever
 from .storage import KnowledgeLibrary
 
@@ -24,6 +25,18 @@ class GroundedQA:
 
     def answer_query(self, query: str, library: KnowledgeLibrary, top_k: int = 5) -> dict:
         plan = self.query_planner.plan(query)
+
+        # Superlative/aggregate questions ("fewest ingredients", "cheapest")
+        # ask for a MIN/MAX over a fact computed across the whole library -
+        # no amount of top-k similarity search answers that, so this branches
+        # to a real computation over RecipeFact data instead. Checked
+        # independently of `plan` (which is just a cosmetic label for the
+        # prompt) so this can't be silently skipped by a query that doesn't
+        # happen to match the planner's own separate keyword list.
+        aggregate_plan = interpret_aggregate_query(query)
+        if aggregate_plan is not None:
+            return self._answer_aggregate_query(query, plan, aggregate_plan, library)
+
         chunks = self.retriever.semantic_search(query, top_k=top_k)
         citations = [library.get_citation(chunk) for chunk in chunks]
         prompt = self.build_prompt(query, plan, chunks, citations)
@@ -65,3 +78,80 @@ class GroundedQA:
             f"{citation_legend}\n"
         )
         return prompt
+
+    def _answer_aggregate_query(
+        self, query: str, plan: str, aggregate_plan: AggregateQueryPlan, library: KnowledgeLibrary
+    ) -> dict:
+        if not aggregate_plan.answerable:
+            answer = (
+                "I can't answer that from the ingested material: cost/price isn't tracked in the "
+                "source text, so any number I gave would be a guess, not a grounded citation."
+            )
+            return {"query": query, "plan": plan, "answer": answer, "citations": [], "chunks": []}
+
+        facts = library.list_recipe_facts()
+        if not facts:
+            answer = (
+                "This library doesn't have recipe data extracted yet. Enable recipe extraction in "
+                "this library's settings and re-ingest, then ask again."
+            )
+            return {"query": query, "plan": plan, "answer": answer, "citations": [], "chunks": []}
+
+        def metric_value(fact: RecipeFact) -> int:
+            return fact.ingredient_count if aggregate_plan.metric == "ingredient_count" else fact.step_count
+
+        target_value = (
+            min(metric_value(fact) for fact in facts)
+            if aggregate_plan.direction == "min"
+            else max(metric_value(fact) for fact in facts)
+        )
+        winners = [fact for fact in facts if metric_value(fact) == target_value]
+
+        metric_label = "ingredients" if aggregate_plan.metric == "ingredient_count" else "steps"
+        superlative = "fewest" if aggregate_plan.direction == "min" else "most"
+        descriptions = [f"{fact.recipe_name} ({metric_value(fact)} {metric_label})" for fact in winners]
+        if len(winners) == 1:
+            answer = f"The recipe with the {superlative} {metric_label} is {descriptions[0]}."
+        else:
+            answer = f"{len(winners)} recipes are tied for the {superlative} {metric_label}: " + "; ".join(
+                descriptions
+            ) + "."
+
+        citations = [self._citation_for_fact(fact, library) for fact in winners]
+        chunks = [self._pseudo_chunk_for_fact(fact) for fact in winners]
+        return {
+            "query": query,
+            "plan": plan,
+            "answer": answer,
+            "citations": [citation.to_dict() for citation in citations],
+            "chunks": [chunk.to_dict() for chunk in chunks],
+        }
+
+    def _citation_for_fact(self, fact: RecipeFact, library: KnowledgeLibrary) -> Citation:
+        source = library.sources.get(fact.source_id)
+        return Citation(
+            citation_id=f"recipe-{fact.document_id}-{fact.recipe_name}",
+            library_id=fact.library_id,
+            source_id=fact.source_id,
+            document_id=fact.document_id,
+            chunk_id="",
+            page_number=fact.page_number,
+            section=fact.recipe_name,
+            filename=source.filename if source else None,
+            file_type=source.file_type if source else None,
+        )
+
+    def _pseudo_chunk_for_fact(self, fact: RecipeFact) -> Chunk:
+        """The GUI's "raw retrieved chunks" view expects Chunk-shaped data;
+        reusing it here surfaces the recipe's real source excerpt as evidence
+        with no GUI changes needed."""
+        citation_id = f"recipe-{fact.document_id}-{fact.recipe_name}"
+        return Chunk(
+            chunk_id=citation_id,
+            library_id=fact.library_id,
+            source_id=fact.source_id,
+            document_id=fact.document_id,
+            text=fact.source_excerpt,
+            metadata={"page_number": str(fact.page_number or ""), "section": fact.recipe_name},
+            citation_id=citation_id,
+        )
