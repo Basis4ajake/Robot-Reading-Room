@@ -62,6 +62,12 @@ class LibraryConfig:
     # back to fake DummyEmbedder vectors (see project_embedding_bug_2026_09_05
     # in memory). nomic-embed-text matches the GUI's own default.
     embedding_model: Optional[str] = "nomic-embed-text"
+    # Recipe segmentation/extraction (recipe_extraction.py) is format-specific
+    # (assumes an ALL-CAPS-heading-per-recipe layout) and runs a real LLM call
+    # per recipe at ingest time - opt-in per library rather than attempted on
+    # every document, so a non-recipe library never pays that cost or risks a
+    # false-positive segment being misreported as a "recipe".
+    enable_recipe_extraction: bool = False
 
     def __post_init__(self) -> None:
         # The dataclass default above only applies when embedding_model is
@@ -251,6 +257,10 @@ class IngestionState:
     # config change with no content change would otherwise be silently
     # ignored by incremental (hash-based) ingestion forever.
     chunking_signature: Optional[str] = None
+    # Same idea again, for enable_recipe_extraction: toggling it on for an
+    # already-ingested library must force reprocessing so facts actually get
+    # extracted, not be silently skipped by the unchanged-content check.
+    recipe_extraction_signature: Optional[str] = None
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
@@ -263,6 +273,55 @@ class IngestionState:
             documents=data.get("documents", {}),
             embedding_signature=data.get("embedding_signature"),
             chunking_signature=data.get("chunking_signature"),
+            recipe_extraction_signature=data.get("recipe_extraction_signature"),
+        )
+
+
+@dataclass
+class RecipeFact:
+    """Structured facts extracted from one recipe (see recipe_extraction.py).
+
+    Grounded by source_excerpt rather than a chunk_id: extraction runs on the
+    whole-document text before chunking, on its own recipe-sized text unit, so
+    it has no natural chunk to point back to. The excerpt IS the evidence.
+    """
+
+    library_id: str
+    source_id: str
+    document_id: str
+    recipe_name: str
+    ingredients: List[str] = field(default_factory=list)
+    step_count: int = 0
+    source_excerpt: str = ""
+    page_number: Optional[int] = None
+
+    @property
+    def ingredient_count(self) -> int:
+        return len(self.ingredients)
+
+    def to_dict(self) -> Dict:
+        return {
+            "library_id": self.library_id,
+            "source_id": self.source_id,
+            "document_id": self.document_id,
+            "recipe_name": self.recipe_name,
+            "ingredients": self.ingredients,
+            "step_count": self.step_count,
+            "source_excerpt": self.source_excerpt,
+            "page_number": self.page_number,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "RecipeFact":
+        return cls(
+            library_id=data["library_id"],
+            source_id=data["source_id"],
+            document_id=data["document_id"],
+            recipe_name=data["recipe_name"],
+            ingredients=data.get("ingredients", []),
+            step_count=data.get("step_count", 0),
+            source_excerpt=data.get("source_excerpt", ""),
+            page_number=data.get("page_number"),
         )
 
 
@@ -291,3 +350,13 @@ def make_chunk_id(source_id: str = "", document_id: str = "", offset: int = 0) -
 def make_source_id(source_path: str) -> str:
     normalized = Path(source_path).resolve().as_posix()
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def make_recipe_fact_citation_id(fact: "RecipeFact") -> str:
+    """document_id + recipe_name alone collide when a book has two recipes
+    with the same title - confirmed on a real book ("ROMAN FRY", "BISCUIT"
+    each appear twice). Including source_excerpt disambiguates them since
+    two distinct recipes essentially never share the same excerpt text.
+    """
+    normalized = f"{fact.document_id}:{fact.recipe_name}:{fact.source_excerpt}"
+    return "recipe-" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()

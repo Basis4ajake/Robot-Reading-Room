@@ -1,4 +1,5 @@
 import sys
+import threading
 import types
 
 import pytest
@@ -116,6 +117,68 @@ def test_source_ingest_and_chat_end_to_end(client, tmp_path):
     remove_response = client.delete(f"/api/v1/libraries/rag-lib/sources/{source['source_id']}")
     assert remove_response.status_code == 204
     assert client.get("/api/v1/libraries/rag-lib/sources").json() == []
+
+
+def test_create_rejects_non_positive_chunk_size(client):
+    """chunk_size <= 0 used to be silently accepted and treated as "don't
+    sub-split at all" (ParagraphChunker._split_to_size) rather than
+    rejected - the GUI's min="1" caught this for GUI users, a direct API
+    call had no such guard."""
+    response = client.post(
+        "/api/v1/libraries",
+        json={"library_id": "bad-chunk-size", "name": "Bad", "chunk_size": 0},
+    )
+    assert response.status_code == 422
+
+    response = client.post(
+        "/api/v1/libraries",
+        json={"library_id": "bad-chunk-size", "name": "Bad", "chunk_size": -5},
+    )
+    assert response.status_code == 422
+
+
+def test_update_rejects_non_positive_chunk_size(client):
+    client.post("/api/v1/libraries", json={"library_id": "test-lib", "name": "Test"})
+    response = client.patch("/api/v1/libraries/test-lib", json={"chunk_size": 0})
+    assert response.status_code == 422
+    # A real, valid update still works after a rejected one.
+    response = client.patch("/api/v1/libraries/test-lib", json={"chunk_size": 500})
+    assert response.status_code == 200
+    assert response.json()["chunk_size"] == 500
+
+
+def test_chat_rejects_non_positive_top_k(client):
+    client.post("/api/v1/libraries", json={"library_id": "test-lib", "name": "Test"})
+    response = client.post("/api/v1/libraries/test-lib/chat", json={"query": "hi", "top_k": 0})
+    assert response.status_code == 422
+
+
+def test_patch_returns_409_while_an_ingest_is_in_flight(client):
+    client.post("/api/v1/libraries", json={"library_id": "busy-lib", "name": "Busy Lib"})
+    app_state = client.app.state.lkl
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_runtime():
+        with app_state.use_runtime("busy-lib"):
+            entered.set()
+            release.wait(timeout=5)
+
+    thread = threading.Thread(target=hold_runtime)
+    thread.start()
+    try:
+        assert entered.wait(timeout=5), "use_runtime never entered"
+        response = client.patch("/api/v1/libraries/busy-lib", json={"top_k": 3})
+        assert response.status_code == 409
+    finally:
+        release.set()
+        thread.join(timeout=5)
+
+    # Busy only while the ingest actually held the runtime.
+    response = client.patch("/api/v1/libraries/busy-lib", json={"top_k": 3})
+    assert response.status_code == 200
+    assert response.json()["top_k"] == 3
 
 
 def test_models_endpoint_reports_unavailable_when_ollama_missing(tmp_path):

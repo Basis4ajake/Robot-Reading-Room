@@ -8,7 +8,7 @@ This repository is an early MVP for a local, modular Retrieval-Augmented Generat
 
 - Knowledge Library creation and management
 - Library isolation and local storage
-- Text, Markdown, and PDF ingestion (PDF via PyPDF2, with per-page citation tracking)
+- Text, Markdown, and PDF ingestion (PDF via `pypdf`, with per-page citation tracking)
 - Incremental indexing by content hash, with automatic detection/recovery if a library's embedding model or chunking configuration changes since it was last indexed
 - A local provider abstraction layer for loaders, chunkers, embedders, vector stores, and LLMs, backed by real local Ollama models (chat + embedding) with a dummy fallback for trying the app without Ollama running
 - Grounded answer generation with citation tracking, including accurate per-chunk page numbers for PDFs
@@ -254,6 +254,14 @@ Current test coverage includes:
 - citation/provenance integrity
 - library persistence and isolation
 
+`pytest` uses dummy providers throughout, deliberately, so it runs fast with no external dependency. That means it cannot catch a real retrieval-quality regression - e.g. a chunking or embedding-model change that still runs without error but quietly surfaces the wrong chunks. For that, run:
+
+```bash
+python scripts/eval_retrieval.py
+```
+
+This ingests a small fixed corpus (`scripts/retrieval_eval_corpus.txt`) with real Ollama embeddings and checks that a fixed set of unambiguous questions still retrieve the chunk they should. It refuses to run (rather than report a false result) if Ollama isn't reachable. Run it after touching chunking, embedding config, or retrieval code - this exact failure mode (looks fine, silently wrong) has been the majority of real bugs found in this project so far.
+
 ## 13. Work-in-Progress Notes
 
 This guide is intentionally written as an incrementally updated document.
@@ -265,7 +273,7 @@ Current limitations:
 - Ollama integration is real (not a stub) and depends on the local Ollama SDK/daemon being available; a dummy fallback exists for trying the app without Ollama, and now warns loudly (rather than substituting silently) when it's used unintentionally.
 - Query planning is rule-based and designed to grow over time.
 - `SimpleKeywordSearcher`/hybrid search and a real reranker (`DummyReranker` is currently a no-op passthrough) exist as interfaces but aren't wired into the default pipeline.
-- `AppState`'s per-library runtime cache has no concurrency locking — concurrent requests to the same library (e.g. an ingest and a config update at the same time) can race.
+- `AppState`'s per-library runtime cache is guarded against a config change racing an in-flight ingest/chat/source-change (a `PATCH`/`DELETE` gets `409 Conflict` instead of silently corrupting the connection); it does NOT serialize concurrent chat/ingest requests to the same library against each other — a chat request while an ingest is running is still allowed to proceed concurrently.
 
 Future improvements planned for the next iterations:
 

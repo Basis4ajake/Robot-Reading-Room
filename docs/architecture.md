@@ -30,7 +30,7 @@
   - `LibraryRegistry` manages the set of libraries under a data directory: create, list, open, update config, delete.
 
 - `src/local_knowledge_library/api/`
-  - A FastAPI service exposing the library, ingestion, and QA layers over HTTP for the Tauri GUI (`gui/`) and any `curl`/scripting use. `app.py` builds the app and owns an `AppState` (the registry plus a small cache of per-library vector store/retriever/QA instances, with no concurrency locking — see docs/how_to_use.md §13). Routers live under `api/routers/`: `libraries`, `sources`, `chat`, `models`, `health`. Run with `python -m local_knowledge_library.api`.
+  - A FastAPI service exposing the library, ingestion, and QA layers over HTTP for the Tauri GUI (`gui/`) and any `curl`/scripting use. `app.py` builds the app and owns an `AppState` (the registry plus a small cache of per-library vector store/retriever/QA instances). `AppState.use_runtime()` (chat, ingest, source changes) and `AppState.exclusive()` (config `PATCH`/`DELETE`) guard that cache against a config change racing an in-flight request — `exclusive()` refuses immediately (`409`) rather than blocking if the library is busy, since blocking could mean waiting out an hour-long recipe-extraction ingest. Routers live under `api/routers/`: `libraries`, `sources`, `chat`, `models`, `health`. Run with `python -m local_knowledge_library.api`.
 
 - `gui/`
   - The Tauri desktop GUI: a plain HTML/JS/CSS frontend (`gui/src/`, no framework/build step) served directly by Tauri's webview, plus a thin Rust shell (`gui/src-tauri/`) for the native window, file-picker dialog, and opening external links in the system browser. Talks to the API above over `fetch()`. See `gui/README.md`.
