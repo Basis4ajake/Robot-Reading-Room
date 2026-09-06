@@ -1,4 +1,5 @@
 import sys
+import threading
 import types
 
 import pytest
@@ -116,6 +117,34 @@ def test_source_ingest_and_chat_end_to_end(client, tmp_path):
     remove_response = client.delete(f"/api/v1/libraries/rag-lib/sources/{source['source_id']}")
     assert remove_response.status_code == 204
     assert client.get("/api/v1/libraries/rag-lib/sources").json() == []
+
+
+def test_patch_returns_409_while_an_ingest_is_in_flight(client):
+    client.post("/api/v1/libraries", json={"library_id": "busy-lib", "name": "Busy Lib"})
+    app_state = client.app.state.lkl
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_runtime():
+        with app_state.use_runtime("busy-lib"):
+            entered.set()
+            release.wait(timeout=5)
+
+    thread = threading.Thread(target=hold_runtime)
+    thread.start()
+    try:
+        assert entered.wait(timeout=5), "use_runtime never entered"
+        response = client.patch("/api/v1/libraries/busy-lib", json={"top_k": 3})
+        assert response.status_code == 409
+    finally:
+        release.set()
+        thread.join(timeout=5)
+
+    # Busy only while the ingest actually held the runtime.
+    response = client.patch("/api/v1/libraries/busy-lib", json={"top_k": 3})
+    assert response.status_code == 200
+    assert response.json()["top_k"] == 3
 
 
 def test_models_endpoint_reports_unavailable_when_ollama_missing(tmp_path):

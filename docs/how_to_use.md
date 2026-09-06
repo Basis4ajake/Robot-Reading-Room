@@ -273,7 +273,7 @@ Current limitations:
 - Ollama integration is real (not a stub) and depends on the local Ollama SDK/daemon being available; a dummy fallback exists for trying the app without Ollama, and now warns loudly (rather than substituting silently) when it's used unintentionally.
 - Query planning is rule-based and designed to grow over time.
 - `SimpleKeywordSearcher`/hybrid search and a real reranker (`DummyReranker` is currently a no-op passthrough) exist as interfaces but aren't wired into the default pipeline.
-- `AppState`'s per-library runtime cache has no concurrency locking — concurrent requests to the same library (e.g. an ingest and a config update at the same time) can race.
+- `AppState`'s per-library runtime cache is guarded against a config change racing an in-flight ingest/chat/source-change (a `PATCH`/`DELETE` gets `409 Conflict` instead of silently corrupting the connection); it does NOT serialize concurrent chat/ingest requests to the same library against each other — a chat request while an ingest is running is still allowed to proceed concurrently.
 
 Future improvements planned for the next iterations:
 

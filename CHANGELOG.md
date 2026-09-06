@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (AppState concurrency locking)
+
+### Fixed
+- A config `PATCH`/`DELETE` could close a library's vector-store connection while an in-flight `/ingest`, `/chat`, or source change was still using it (a pre-existing gap, now more likely to actually bite since recipe extraction can make an ingest run up to an hour). `AppState.exclusive()` now refuses config changes/deletion immediately (`409 Conflict`, not a block that could hang the UI for an hour) when the library is in use; `AppState.use_runtime()` marks chat/ingest/source-change requests as in-use so this can't race. `get_runtime()` removed in favor of `use_runtime()` everywhere. Verified with real concurrent threads (`tests/test_state.py`, 6 new) and a real HTTP-level 409 test driving the actual FastAPI app (`tests/test_api.py`). 90/90 tests passing.
+
 ## [Unreleased] - 2026-09-06 (full-book validation run: 2 real bugs fixed, 1 honesty improvement)
 
 Ran the complete 211-recipe book (not an excerpt) through real ingestion with live Ollama: 222 segments found, 216 (97%) successfully extracted, in 41.6 minutes. Found and fixed two real bugs no unit test or small excerpt had caught:

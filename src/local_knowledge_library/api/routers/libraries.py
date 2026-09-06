@@ -6,7 +6,7 @@ from ...registry import LibraryNotFoundError
 from ...storage import KnowledgeLibrary
 from ..dependencies import get_app_state
 from ..schemas import LibraryCreateRequest, LibraryResponse, LibraryUpdateRequest
-from ..state import AppState
+from ..state import AppState, LibraryBusyError
 
 router = APIRouter(prefix="/api/v1/libraries", tags=["libraries"])
 
@@ -55,10 +55,14 @@ def get_library(library_id: str, state: AppState = Depends(get_app_state)):
 @router.patch("/{library_id}", response_model=LibraryResponse)
 def update_library(library_id: str, payload: LibraryUpdateRequest, state: AppState = Depends(get_app_state)):
     try:
-        library = state.registry.update_config(library_id, **payload.model_dump())
-    except LibraryNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Library {library_id} not found") from exc
-    state.invalidate(library_id)
+        with state.exclusive(library_id):
+            try:
+                library = state.registry.update_config(library_id, **payload.model_dump())
+            except LibraryNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=f"Library {library_id} not found") from exc
+            state.invalidate(library_id)
+    except LibraryBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _to_response(library)
 
 
@@ -67,7 +71,11 @@ def delete_library(library_id: str, confirm: bool = False, state: AppState = Dep
     if not confirm:
         raise HTTPException(status_code=400, detail="Pass confirm=true to permanently delete this library")
     try:
-        state.registry.delete_library(library_id)
-    except LibraryNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Library {library_id} not found") from exc
-    state.invalidate(library_id)
+        with state.exclusive(library_id):
+            try:
+                state.registry.delete_library(library_id)
+            except LibraryNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=f"Library {library_id} not found") from exc
+            state.invalidate(library_id)
+    except LibraryBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

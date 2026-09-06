@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...registry import LibraryNotFoundError
 from ..dependencies import get_app_state
 from ..schemas import IngestResponse, SourceAddRequest, SourceResponse
-from ..state import AppState
+from ..state import AppState, LibraryBusyError
 
 router = APIRouter(prefix="/api/v1/libraries/{library_id}", tags=["sources"])
 
@@ -52,15 +52,21 @@ def remove_source(library_id: str, source_id: str, state: AppState = Depends(get
     if source_id not in library.sources:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     chunk_ids = [chunk.chunk_id for chunk in library.chunks.values() if chunk.source_id == source_id]
-    runtime = state.get_runtime(library_id)
-    library.remove_source(source_id)
-    if chunk_ids:
-        runtime.vector_store.remove(chunk_ids)
+    try:
+        with state.use_runtime(library_id) as runtime:
+            library.remove_source(source_id)
+            if chunk_ids:
+                runtime.vector_store.remove(chunk_ids)
+    except LibraryBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/ingest", response_model=IngestResponse)
 def ingest(library_id: str, state: AppState = Depends(get_app_state)):
     library = _get_library(state, library_id)
-    runtime = state.get_runtime(library_id)
-    result = runtime.pipeline.ingest(library)
+    try:
+        with state.use_runtime(library_id) as runtime:
+            result = runtime.pipeline.ingest(library)
+    except LibraryBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return IngestResponse(**result)
