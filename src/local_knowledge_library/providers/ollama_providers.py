@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from typing import Callable, Sequence
 
 from ..abstracts import Embedder, LLMProvider
 from ..models import Chunk
@@ -223,18 +223,23 @@ class InMemoryVectorStore:
 
 
 class SimpleKeywordSearcher:
-    def __init__(self, chunks: Sequence["Chunk"]):
-        self.chunks = list(chunks)
+    def __init__(self, chunks_provider: Callable[[], Sequence["Chunk"]]):
+        # Takes a zero-arg callable rather than a static chunk list. Retriever
+        # (and this searcher) live inside AppState's per-library runtime
+        # cache, which is built once and reused across many requests - a
+        # static snapshot taken at build time would silently go stale the
+        # moment the next /ingest adds or removes chunks, reproducing the
+        # exact "quietly wrong after a content change" bug class this
+        # project has spent real effort hunting down elsewhere (embedding
+        # signatures, chunking signatures, AppState locking). Calling this
+        # fresh on every search reads whatever KnowledgeLibrary.open()
+        # loaded for THIS request, which is already always current.
+        self.chunks_provider = chunks_provider
 
     def search(self, query: str, top_k: int) -> Sequence["Chunk"]:
-        # Was counting query terms within the query itself, not the chunk
-        # text - every chunk scored identically and this never actually
-        # searched anything. Not currently wired into the default pipeline
-        # (see docs/how_to_use.md §13), so dormant rather than user-visible,
-        # but would have silently done nothing the moment it was wired in.
         terms = query.lower().split()
         scored = []
-        for chunk in self.chunks:
+        for chunk in self.chunks_provider():
             chunk_text = chunk.text.lower()
             score = sum(chunk_text.count(term) for term in terms)
             scored.append((score, chunk))

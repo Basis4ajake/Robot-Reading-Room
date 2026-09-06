@@ -110,6 +110,7 @@ def test_source_ingest_and_chat_end_to_end(client, tmp_path):
     assert body["query"] == "What does the document say?"
     assert body["answer"]
     assert body["citations"]
+    assert body["answer_source"] == "dummy"
 
     sources_response = client.get("/api/v1/libraries/rag-lib/sources")
     assert len(sources_response.json()) == 1

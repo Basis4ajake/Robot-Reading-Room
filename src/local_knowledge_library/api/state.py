@@ -8,7 +8,7 @@ from typing import Dict, Iterator
 from ..chunkers import ParagraphChunker
 from ..ingestion import IngestionPipeline
 from ..loaders import MarkdownLoader, PdfLoader, TextLoader
-from ..providers import SqliteVectorStore
+from ..providers import SimpleKeywordSearcher, SqliteVectorStore
 from ..providers.factory import build_providers
 from ..qa import GroundedQA
 from ..query_planner import QueryPlanner
@@ -139,7 +139,19 @@ class AppState:
         pipeline = IngestionPipeline(
             loaders, chunker, embedder, vector_store, debug=library.config.debug, llm_provider=llm_provider
         )
-        retriever = Retriever(vector_store=vector_store, embedder=embedder, debug=library.config.debug)
+        # Reads library.chunks fresh from disk on every search (see
+        # SimpleKeywordSearcher's docstring) rather than a snapshot from
+        # this runtime's build time, which would go stale after the next
+        # ingest since this runtime is cached and reused across requests.
+        keyword_searcher = SimpleKeywordSearcher(
+            lambda: self.registry.get_library(library_id).chunks.values()
+        )
+        retriever = Retriever(
+            vector_store=vector_store,
+            embedder=embedder,
+            keyword_searcher=keyword_searcher,
+            debug=library.config.debug,
+        )
         planner = QueryPlanner()
         qa = GroundedQA(retriever, planner, llm_provider, debug=library.config.debug)
 

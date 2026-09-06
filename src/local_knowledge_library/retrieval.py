@@ -37,10 +37,21 @@ class Retriever:
             return []
         return list(self.keyword_searcher.search(query, top_k))
 
-    def hybrid_search(self, query: str, top_k_semantic: int = 5, top_k_keyword: int = 5) -> List[Chunk]:
-        semantic_results = self.semantic_search(query, top_k_semantic)
-        keyword_results = self.keyword_search(query, top_k_keyword) if self.keyword_searcher else []
+    def hybrid_search(self, query: str, top_k: int = 5) -> List[Chunk]:
+        """Semantic results first, keyword results filling any remaining
+        slots - capped at a single top_k total. (Previously took separate
+        top_k_semantic/top_k_keyword and unioned both in full, which could
+        silently return up to 2x top_k chunks - quietly doubling prompt
+        size versus what the caller actually asked for. Not currently
+        called by anything, so no external behavior changes.)
+        """
+        semantic_results = self.semantic_search(query, top_k)
         combined = {chunk.chunk_id: chunk for chunk in semantic_results}
-        for chunk in keyword_results:
-            combined.setdefault(chunk.chunk_id, chunk)
+        if self.keyword_searcher is not None and len(combined) < top_k:
+            for chunk in self.keyword_search(query, top_k):
+                if chunk.chunk_id in combined:
+                    continue
+                combined[chunk.chunk_id] = chunk
+                if len(combined) >= top_k:
+                    break
         return list(combined.values())

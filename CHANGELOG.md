@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (answer_source + hybrid search wired in)
+
+### Added
+- `ChatResponse.answer_source`: `"llm"` (real Ollama answer), `"dummy"` (fallback), or `"computed"` (deterministic aggregate-query answer, no LLM call). Closes the long-standing "no field distinguishing a real answer from the dummy fallback" gap. GUI shows a small badge for anything other than `"llm"`.
+- `SimpleKeywordSearcher`/hybrid search wired into the default retrieval pipeline: semantic results first, keyword results fill remaining `top_k` slots. Rewired `SimpleKeywordSearcher` to read chunks fresh on every search (a callable, not a cached list) since it lives inside `AppState`'s per-library runtime cache and a static snapshot would have gone stale after the next ingest - verified against the real `AppState` class, not just a unit test.
+
+### Fixed
+- `Retriever.hybrid_search` took separate `top_k_semantic`/`top_k_keyword` and unioned both result sets in full, which could silently return up to 2x `top_k` chunks. Now takes one `top_k` and caps the combined result at it. Not previously called by anything, so no external behavior changed.
+
+100/100 tests passing.
+
 ## [Unreleased] - 2026-09-06 (second low-overhead sweep, fresh eyes)
 
 ### Fixed
