@@ -3,11 +3,18 @@ from __future__ import annotations
 from typing import List
 
 from .abstracts import LLMProvider
-from .models import Citation, Chunk, RecipeFact
+from .models import Citation, Chunk, RecipeFact, make_recipe_fact_citation_id
 from .query_planner import QueryPlanner
 from .recipe_extraction import AggregateQueryPlan, interpret_aggregate_query
 from .retrieval import Retriever
 from .storage import KnowledgeLibrary
+
+# A real full-book run (211 recipes, qwen2:1.5b) produced 8-way and 16-way
+# ties at the minimum ingredient/step count - real recipes tying that widely
+# is implausible; it's a sign of the small local model under-extracting on
+# some of them, not that they're genuinely identical. Above this many
+# winners, say so rather than presenting the list as precise.
+_WIDE_TIE_CAVEAT_THRESHOLD = 3
 
 
 class GroundedQA:
@@ -116,6 +123,12 @@ class GroundedQA:
             answer = f"{len(winners)} recipes are tied for the {superlative} {metric_label}: " + "; ".join(
                 descriptions
             ) + "."
+            if len(winners) > _WIDE_TIE_CAVEAT_THRESHOLD:
+                answer += (
+                    f" A tie this wide is often a sign the extraction under-counted {metric_label} "
+                    "on some of these recipes rather than them being genuinely identical - treat this "
+                    "as a starting point to check by hand, not a precise ranking."
+                )
 
         citations = [self._citation_for_fact(fact, library) for fact in winners]
         chunks = [self._pseudo_chunk_for_fact(fact) for fact in winners]
@@ -130,7 +143,7 @@ class GroundedQA:
     def _citation_for_fact(self, fact: RecipeFact, library: KnowledgeLibrary) -> Citation:
         source = library.sources.get(fact.source_id)
         return Citation(
-            citation_id=f"recipe-{fact.document_id}-{fact.recipe_name}",
+            citation_id=make_recipe_fact_citation_id(fact),
             library_id=fact.library_id,
             source_id=fact.source_id,
             document_id=fact.document_id,
@@ -145,7 +158,7 @@ class GroundedQA:
         """The GUI's "raw retrieved chunks" view expects Chunk-shaped data;
         reusing it here surfaces the recipe's real source excerpt as evidence
         with no GUI changes needed."""
-        citation_id = f"recipe-{fact.document_id}-{fact.recipe_name}"
+        citation_id = make_recipe_fact_citation_id(fact)
         return Chunk(
             chunk_id=citation_id,
             library_id=fact.library_id,

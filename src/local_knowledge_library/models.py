@@ -350,3 +350,13 @@ def make_chunk_id(source_id: str = "", document_id: str = "", offset: int = 0) -
 def make_source_id(source_path: str) -> str:
     normalized = Path(source_path).resolve().as_posix()
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def make_recipe_fact_citation_id(fact: "RecipeFact") -> str:
+    """document_id + recipe_name alone collide when a book has two recipes
+    with the same title - confirmed on a real book ("ROMAN FRY", "BISCUIT"
+    each appear twice). Including source_excerpt disambiguates them since
+    two distinct recipes essentially never share the same excerpt text.
+    """
+    normalized = f"{fact.document_id}:{fact.recipe_name}:{fact.source_excerpt}"
+    return "recipe-" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()

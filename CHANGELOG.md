@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (full-book validation run: 2 real bugs fixed, 1 honesty improvement)
+
+Ran the complete 211-recipe book (not an excerpt) through real ingestion with live Ollama: 222 segments found, 216 (97%) successfully extracted, in 41.6 minutes. Found and fixed two real bugs no unit test or small excerpt had caught:
+
+### Fixed
+- The persisted recipe name trusted the LLM's own self-reported `recipe_name` JSON field instead of the already-verified segment heading. Confirmed via the real run: the book has exactly one `"QUEEN'S SOUP"` heading, yet ingestion persisted a phantom second fact under `"Queen's Soup"` with different (wrong) counts - the LLM had misreported which recipe it was looking at. Now uses the segment's own heading (reliable by construction) for the name; the LLM is only trusted for ingredients/step_count.
+- `citation_id`/`chunk_id` for a recipe citation were built from `document_id` + `recipe_name` alone, which collide when a book has two recipes sharing a title - confirmed real on this book (`"ROMAN FRY"` and `"BISCUIT"` each appear twice). Added `make_recipe_fact_citation_id()`, hashing in the source excerpt too so genuinely distinct recipes never collide even when same-titled.
+
+### Changed
+- Aggregate answers ("fewest ingredients", "simplest") now add an honest caveat when more than 3 recipes tie at the extreme value, rather than presenting it as precise. Real evidence: the full-book run produced an 8-way and a 16-way tie at the minimum, which is far more likely small-model under-extraction than genuine equality.
+
 ## [Unreleased] - 2026-09-06 (recipe extraction GUI checkbox)
 
 ### Added

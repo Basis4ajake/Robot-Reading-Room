@@ -193,7 +193,16 @@ def to_recipe_fact(
     document_id: str,
     page_number: Optional[int] = None,
 ) -> RecipeFact:
-    """Attach ingestion provenance to an extraction result for persistence."""
+    """Attach ingestion provenance to an extraction result for persistence.
+
+    Uses `segment.name` (the already-verified heading from `segment_recipes`)
+    rather than the LLM's own self-reported `facts.recipe_name` - a real
+    30-minute full-book run surfaced the LLM occasionally misreporting the
+    name of the recipe it was just given (e.g. "QUEEN'S SOUP" -> a fact
+    persisted as "Queen's Soup" with different, wrong ingredient/step
+    counts - no such heading exists elsewhere in the source). The heading is
+    reliable by construction; the LLM is only needed for the facts about it.
+    """
     excerpt = segment.text[:_EXCERPT_LENGTH].strip()
     if len(segment.text) > _EXCERPT_LENGTH:
         excerpt += "..."
@@ -201,7 +210,7 @@ def to_recipe_fact(
         library_id=library_id,
         source_id=source_id,
         document_id=document_id,
-        recipe_name=facts.recipe_name,
+        recipe_name=segment.name,
         ingredients=facts.ingredients,
         step_count=facts.step_count,
         source_excerpt=excerpt,

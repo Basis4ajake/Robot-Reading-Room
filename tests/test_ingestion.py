@@ -359,7 +359,10 @@ def test_ingestion_persists_recipe_facts_when_extraction_enabled(tmp_path):
 
     facts = library.list_recipe_facts()
     assert len(facts) == 1
-    assert facts[0].recipe_name == "Gnocchi"
+    # The persisted name comes from the verified segment heading ("GNOCCHI"),
+    # not the scripted LLM's own self-reported "Gnocchi" - see
+    # to_recipe_fact's docstring for why this matters.
+    assert facts[0].recipe_name == "GNOCCHI"
     assert facts[0].ingredients == ["potatoes", "cheese"]
     assert facts[0].ingredient_count == 2
     assert facts[0].step_count == 2
@@ -369,7 +372,7 @@ def test_ingestion_persists_recipe_facts_when_extraction_enabled(tmp_path):
     reopened = KnowledgeLibrary.open(library.config)
     reopened_facts = reopened.list_recipe_facts()
     assert len(reopened_facts) == 1
-    assert reopened_facts[0].recipe_name == "Gnocchi"
+    assert reopened_facts[0].recipe_name == "GNOCCHI"
 
 
 def test_ingestion_skips_recipe_extraction_when_disabled(tmp_path):
@@ -411,7 +414,7 @@ def test_ingestion_extracts_recipes_when_flag_is_toggled_on_after_first_ingest(t
     pipeline.ingest(library)
     facts = library.list_recipe_facts()
     assert len(facts) == 1
-    assert facts[0].recipe_name == "Gnocchi"
+    assert facts[0].recipe_name == "GNOCCHI"
 
 
 def test_ingestion_clears_recipe_facts_when_flag_is_toggled_off(tmp_path):

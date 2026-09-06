@@ -11,6 +11,7 @@ from local_knowledge_library.models import (
     StructureMetadata,
     compute_content_hash,
     make_chunk_id,
+    make_recipe_fact_citation_id,
     make_source_id,
 )
 
@@ -76,6 +77,16 @@ def test_recipe_fact_roundtrip_and_ingredient_count():
 
     restored = RecipeFact.from_dict(fact.to_dict())
     assert restored == fact
+
+
+def test_make_recipe_fact_citation_id_disambiguates_same_titled_recipes():
+    shared = dict(library_id="l", source_id="s", document_id="doc-1", recipe_name="BISCUIT")
+    first = RecipeFact(**shared, ingredients=["flour"], source_excerpt="First biscuit recipe...")
+    second = RecipeFact(**shared, ingredients=["sugar"], source_excerpt="Second biscuit recipe...")
+
+    assert make_recipe_fact_citation_id(first) != make_recipe_fact_citation_id(second)
+    # Deterministic for the same fact.
+    assert make_recipe_fact_citation_id(first) == make_recipe_fact_citation_id(first)
 
 
 def test_document_structure_metadata():

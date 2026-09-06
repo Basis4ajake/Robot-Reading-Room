@@ -225,11 +225,25 @@ def test_to_recipe_fact_attaches_provenance_and_excerpt():
     assert record.library_id == "lib-1"
     assert record.source_id == "src-1"
     assert record.document_id == "doc-1"
-    assert record.recipe_name == "Gnocchi"
+    assert record.recipe_name == "GNOCCHI"
     assert record.ingredients == ["potatoes", "cheese"]
     assert record.ingredient_count == 2
     assert record.page_number == 7
     assert "boiled potatoes" in record.source_excerpt
+
+
+def test_to_recipe_fact_trusts_the_segment_heading_over_the_llms_self_reported_name():
+    """A real full-book run surfaced the LLM occasionally misreporting the
+    recipe name in its own JSON response (e.g. renaming "QUEEN'S SOUP" to
+    "Queen's Soup" with different, wrong ingredient/step counts, creating a
+    phantom duplicate "recipe" that doesn't exist in the source). The
+    heading from segment_recipes is reliable by construction and must win."""
+    segment = RecipeSegment(name="QUEEN'S SOUP", text="chicken broth and rice " * 5, start_line=0)
+    facts = RecipeFacts(recipe_name="Queen's Soup", ingredients=["chicken", "rice"], step_count=2)
+
+    record = to_recipe_fact(segment, facts, library_id="l", source_id="s", document_id="d")
+
+    assert record.recipe_name == "QUEEN'S SOUP"
 
 
 def test_to_recipe_fact_truncates_long_segments_with_ellipsis():

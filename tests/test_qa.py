@@ -80,6 +80,53 @@ def test_answer_query_lists_all_tied_recipes(tmp_path):
     assert "2 recipes are tied" in result["answer"]
     assert "A" in result["answer"] and "B" in result["answer"]
     assert len(result["citations"]) == 2
+    assert "under-counted" not in result["answer"]
+
+
+def test_answer_query_adds_a_caveat_for_a_wide_tie(tmp_path):
+    """A real full-book run produced 8-way and 16-way ties at the minimum
+    ingredient/step count - implausible for real recipes, and a sign of the
+    small extraction model under-counting rather than genuine equality. A
+    wide tie should say so instead of presenting the list as precise."""
+    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    library.register_recipe_facts("doc-1", [
+        RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
+                   recipe_name=name, ingredients=["x"], step_count=1)
+        for name in ["A", "B", "C", "D"]
+    ])
+
+    qa = _make_qa(library)
+    result = qa.answer_query("Which recipe has the fewest ingredients?", library=library)
+
+    assert "4 recipes are tied" in result["answer"]
+    assert "under-counted" in result["answer"]
+
+
+def test_answer_query_gives_distinct_citation_ids_for_same_titled_recipes(tmp_path):
+    """A real book has two different recipes both titled "BISCUIT" - their
+    citation_id/chunk_id must not collide just because they share a
+    document_id and recipe_name, or the GUI can't tell them apart."""
+    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    library.register_recipe_facts("doc-1", [
+        RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
+                   recipe_name="BISCUIT", ingredients=["flour"], step_count=1,
+                   source_excerpt="First biscuit recipe text..."),
+        RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
+                   recipe_name="BISCUIT", ingredients=["sugar"], step_count=1,
+                   source_excerpt="Second, different biscuit recipe text..."),
+    ])
+
+    qa = _make_qa(library)
+    # Both facts have 1 ingredient, so both tie for "fewest" and both land in
+    # the same answer - exactly the scenario where the old document_id +
+    # recipe_name-only id would have collided.
+    result = qa.answer_query("Which recipe has the fewest ingredients?", library=library)
+
+    citation_ids = [c["citation_id"] for c in result["citations"]]
+    assert len(citation_ids) == 2
+    assert len(set(citation_ids)) == 2, "citation_ids collided for two distinct same-titled recipes"
 
 
 def test_answer_query_refuses_cost_questions_honestly(tmp_path):
