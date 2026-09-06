@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-05 (Phase 6, prototype)
+
+### Added
+- `recipe_extraction.py`: standalone recipe segmentation (`segment_recipes`) and per-recipe structured-fact extraction (`extract_recipe_facts`/`extract_all`) via the existing `LLMProvider` interface. Prototype for answering aggregate/superlative questions (e.g. "which recipe uses the fewest ingredients") that plain top-k vector search can't — not yet wired into `IngestionPipeline` or query handling. Verified against a real public-domain cookbook and live Ollama (`qwen2:1.5b`): correct structured JSON in 7-16s per recipe. 7 new tests (`tests/test_recipe_extraction.py`).
+
 ## [Unreleased] - 2026-09-05 (Phase 5)
 
 ### Added
