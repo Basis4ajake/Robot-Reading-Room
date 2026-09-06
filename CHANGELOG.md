@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (recipe extraction GUI checkbox)
+
+### Added
+- "Extract recipe facts" checkbox in the library create/edit forms, wiring up `enable_recipe_extraction` (previously API/config-only) so it's reachable from the app itself. Verified end-to-end with a real browser against the real backend: creating a library with it on, reopening to confirm it's checked, unchecking and saving, reopening to confirm it persisted off.
+
 ## [Unreleased] - 2026-09-06 (recipe segmentation hardened)
 
 ### Fixed

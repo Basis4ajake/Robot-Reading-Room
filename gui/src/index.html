@@ -106,6 +106,13 @@
             </span>
             <input name="embedding_model" data-model-select="embedding" value="nomic-embed-text" required />
           </label>
+          <label class="checkbox-label">
+            <input name="enable_recipe_extraction" type="checkbox" />
+            <span class="label-text">
+              Extract recipe facts
+              <button class="info-tip" data-tooltip="For cookbooks only. At ingest time, runs a local AI call per recipe to pull out ingredients and steps, so you can ask things like 'which recipe uses the fewest ingredients'. Only works well for documents with one short recipe title per section (ALL-CAPS or Title Case) - leave off otherwise. Can take a while for a large book."></button>
+            </span>
+          </label>
 
           <div class="form-actions">
             <button type="button" id="create-library-cancel">Cancel</button>
@@ -163,6 +170,13 @@
                 <a class="model-browse-link" href="https://ollama.com/search?c=embedding" target="_blank" rel="noopener" data-external-link>Browse models ↗</a>
               </span>
               <input name="embedding_model" data-model-select="embedding" required />
+            </label>
+            <label class="checkbox-label">
+              <input name="enable_recipe_extraction" type="checkbox" />
+              <span class="label-text">
+                Extract recipe facts
+                <button class="info-tip" data-tooltip="For cookbooks only. At ingest time, runs a local AI call per recipe to pull out ingredients and steps, so you can ask things like 'which recipe uses the fewest ingredients'. Only works well for documents with one short recipe title per section (ALL-CAPS or Title Case) - leave off otherwise. Can take a while for a large book."></button>
+              </span>
             </label>
 
             <div class="form-actions">

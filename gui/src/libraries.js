@@ -88,6 +88,7 @@ async function handleCreateSubmit(event) {
     top_k: Number(formData.get("top_k")),
     llm_model: formData.get("llm_model").trim(),
     embedding_model: formData.get("embedding_model").trim(),
+    enable_recipe_extraction: formData.get("enable_recipe_extraction") === "on",
   };
 
   createSubmitBtn.disabled = true;
@@ -120,6 +121,7 @@ async function openDetail(libraryId) {
     detailForm.elements.top_k.value = library.top_k;
     detailForm.elements.llm_model.value = library.llm_model;
     detailForm.elements.embedding_model.value = library.embedding_model || "";
+    detailForm.elements.enable_recipe_extraction.checked = Boolean(library.enable_recipe_extraction);
     detailSection.hidden = false;
     showSourcesFor(library.library_id);
     showChatFor(library.library_id);
@@ -150,6 +152,7 @@ async function handleUpdateSubmit(event) {
     top_k: Number(formData.get("top_k")),
     llm_model: formData.get("llm_model").trim(),
     embedding_model: formData.get("embedding_model").trim(),
+    enable_recipe_extraction: formData.get("enable_recipe_extraction") === "on",
   };
 
   detailSaveBtn.disabled = true;
