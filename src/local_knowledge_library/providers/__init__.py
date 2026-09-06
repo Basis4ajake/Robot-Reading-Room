@@ -6,6 +6,7 @@ from .ollama_providers import (
     SqliteVectorStore,
     SimpleKeywordSearcher,
     DummyReranker,
+    LexicalOverlapReranker,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "OllamaQwenProvider",
     "SimpleKeywordSearcher",
     "DummyReranker",
+    "LexicalOverlapReranker",
 ]

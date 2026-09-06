@@ -65,8 +65,9 @@ def remove_source(library_id: str, source_id: str, state: AppState = Depends(get
 def ingest(library_id: str, state: AppState = Depends(get_app_state)):
     library = _get_library(state, library_id)
     try:
-        with state.use_runtime(library_id) as runtime:
-            result = runtime.pipeline.ingest(library)
+        with state.ingest_lock(library_id):
+            with state.use_runtime(library_id) as runtime:
+                result = runtime.pipeline.ingest(library)
     except LibraryBusyError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return IngestResponse(**result)

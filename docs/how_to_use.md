@@ -12,11 +12,13 @@ This repository is an early MVP for a local, modular Retrieval-Augmented Generat
 - Incremental indexing by content hash, with automatic detection/recovery if a library's embedding model or chunking configuration changes since it was last indexed
 - A local provider abstraction layer for loaders, chunkers, embedders, vector stores, and LLMs, backed by real local Ollama models (chat + embedding) with a dummy fallback for trying the app without Ollama running
 - Grounded answer generation with citation tracking, including accurate per-chunk page numbers for PDFs
+- Hybrid (semantic + keyword) retrieval, and a real MIN/MAX-computed answer path for aggregate/superlative questions over structured per-recipe data (opt-in, see §10)
+- `answer_source` on every chat response ("llm"/"dummy"/"computed") so a real answer is never mistaken for a fallback or vice versa
 - Persistent SQLite vector search (the in-memory store exists too, but only for tests)
 - A FastAPI service layer exposing library management, ingestion, model listing, and chat over HTTP (see section 9)
 - A Tauri desktop GUI built on that API — library management, sources/ingestion, and chat from a native window (see section 10)
 - Persistent per-library configuration (model choice, chunk settings)
-- Automated tests (44 and growing)
+- Automated tests (100 and growing)
 
 Planned future improvements are noted at the end of this document.
 
@@ -126,7 +128,7 @@ This allows adding a new document without rebuilding an entire library.
 
 ## 7. Retrieval and Question Answering
 
-The current MVP supports semantic search with a local vector store and a query planner that selects a conceptual strategy.
+Lookup questions use hybrid search: semantic (vector) results first, with keyword matches (`SimpleKeywordSearcher`) filling any remaining slots up to `top_k` — never more. The keyword side re-reads the library's current chunks on every search rather than a cached snapshot, so it can't go stale after a later ingest. A separate `RuleBasedQueryPlanner` selects a conceptual strategy label shown in the prompt/response; superlative/aggregate recipe questions ("which recipe uses the fewest ingredients") bypass retrieval entirely and are answered by a real Python computation over extracted `RecipeFact` data instead — see §10 and `enable_recipe_extraction`.
 
 Example:
 
@@ -134,6 +136,7 @@ Example:
 retriever = Retriever(
     vector_store=vector_store,
     embedder=embedder,
+    keyword_searcher=SimpleKeywordSearcher(lambda: library.chunks.values()),
 )
 qa = GroundedQA(
     retriever=retriever,
@@ -144,9 +147,10 @@ qa = GroundedQA(
 response = qa.answer_query("What does the document say about local privacy?", library)
 print(response["answer"])
 print(response["citations"])
+print(response["answer_source"])  # "llm", "dummy", or "computed"
 ```
 
-The generated answer is assembled from retrieved chunks and citation metadata. The model is not used as the knowledge store.
+The generated answer is assembled from retrieved chunks and citation metadata. The model is not used as the knowledge store. `answer_source` tells you what actually produced the answer text: `"llm"` for a real Ollama-generated answer, `"dummy"` if `DummyLLMProvider` was used (Ollama unavailable or `LKL_FORCE_DUMMY`), or `"computed"` for a deterministic aggregate-query answer with no LLM call at all. The GUI shows a small badge for anything other than `"llm"`.
 
 ## 8. Citations and Provenance
 
@@ -272,19 +276,19 @@ Current limitations:
 - Chunking is paragraph/page-based with word-count sub-splitting (`chunk_size`/`chunk_overlap`) — not yet chapter/section-aware.
 - Ollama integration is real (not a stub) and depends on the local Ollama SDK/daemon being available; a dummy fallback exists for trying the app without Ollama, and now warns loudly (rather than substituting silently) when it's used unintentionally.
 - Query planning is rule-based and designed to grow over time.
-- `SimpleKeywordSearcher`/hybrid search and a real reranker (`DummyReranker` is currently a no-op passthrough) exist as interfaces but aren't wired into the default pipeline.
+- `SimpleKeywordSearcher`/hybrid search are wired into the default pipeline (see §7). A real reranker is not — `DummyReranker` is currently a no-op passthrough.
 - `AppState`'s per-library runtime cache is guarded against a config change racing an in-flight ingest/chat/source-change (a `PATCH`/`DELETE` gets `409 Conflict` instead of silently corrupting the connection); it does NOT serialize concurrent chat/ingest requests to the same library against each other — a chat request while an ingest is running is still allowed to proceed concurrently.
 
 Future improvements planned for the next iterations:
 
 - EPUB/DOCX/HTML and OCR-based loaders
 - Structure-aware chunking by chapter/section (page-level is done; chapter/section is not)
-- Keyword, hybrid, and reciprocal rank fusion search
+- Reciprocal rank fusion search (keyword and hybrid search are done - see §7)
 - Configurable rerankers
 - Export/import of libraries
 - Research workspace workflows
 - Evaluation and RAG benchmarking
-- Streaming chat responses; a `ChatResponse` field distinguishing a real answer from the dummy/degraded fallback (currently only inferable via `/health` + `/models`)
+- Streaming chat responses
 
 ## 14. Contribution and Extension
 

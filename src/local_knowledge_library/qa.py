@@ -4,6 +4,7 @@ from typing import List
 
 from .abstracts import LLMProvider
 from .models import Citation, Chunk, RecipeFact, make_recipe_fact_citation_id
+from .providers.ollama_providers import DummyLLMProvider
 from .query_planner import QueryPlanner
 from .recipe_extraction import AggregateQueryPlan, interpret_aggregate_query
 from .retrieval import Retriever
@@ -44,7 +45,11 @@ class GroundedQA:
         if aggregate_plan is not None:
             return self._answer_aggregate_query(query, plan, aggregate_plan, library)
 
-        chunks = self.retriever.semantic_search(query, top_k=top_k)
+        # hybrid_search falls back to pure semantic results when no
+        # keyword_searcher is configured (e.g. DummyEmbedder-only test
+        # setups), so this is safe even where the retriever wasn't built
+        # with keyword search wired in.
+        chunks = self.retriever.hybrid_search(query, top_k=top_k)
         citations = [library.get_citation(chunk) for chunk in chunks]
         prompt = self.build_prompt(query, plan, chunks, citations)
         if self.debug:
@@ -57,6 +62,10 @@ class GroundedQA:
             "answer": answer,
             "citations": [citation.to_dict() for citation in citations],
             "chunks": [chunk.to_dict() for chunk in chunks],
+            # So the GUI never mistakes a DummyLLMProvider fallback (no real
+            # Ollama reachable) for a real answer - see docs/how_to_use.md's
+            # long-standing "no field distinguishing real from dummy" gap.
+            "answer_source": "dummy" if isinstance(self.llm_provider, DummyLLMProvider) else "llm",
         }
 
     def build_prompt(self, query: str, plan: str, chunks: List[Chunk], citations: List[Citation]) -> str:
@@ -89,12 +98,19 @@ class GroundedQA:
     def _answer_aggregate_query(
         self, query: str, plan: str, aggregate_plan: AggregateQueryPlan, library: KnowledgeLibrary
     ) -> dict:
+        # "computed" (not "llm"/"dummy") for every path below: these answers
+        # are either a deterministic Python MIN/MAX or a fixed refusal
+        # string, never LLM-generated - a real third answer_source, not a
+        # stand-in for one of the other two.
         if not aggregate_plan.answerable:
             answer = (
                 "I can't answer that from the ingested material: cost/price isn't tracked in the "
                 "source text, so any number I gave would be a guess, not a grounded citation."
             )
-            return {"query": query, "plan": plan, "answer": answer, "citations": [], "chunks": []}
+            return {
+                "query": query, "plan": plan, "answer": answer,
+                "citations": [], "chunks": [], "answer_source": "computed",
+            }
 
         facts = library.list_recipe_facts()
         if not facts:
@@ -102,7 +118,10 @@ class GroundedQA:
                 "This library doesn't have recipe data extracted yet. Enable recipe extraction in "
                 "this library's settings and re-ingest, then ask again."
             )
-            return {"query": query, "plan": plan, "answer": answer, "citations": [], "chunks": []}
+            return {
+                "query": query, "plan": plan, "answer": answer,
+                "citations": [], "chunks": [], "answer_source": "computed",
+            }
 
         def metric_value(fact: RecipeFact) -> int:
             return fact.ingredient_count if aggregate_plan.metric == "ingredient_count" else fact.step_count
@@ -138,6 +157,7 @@ class GroundedQA:
             "answer": answer,
             "citations": [citation.to_dict() for citation in citations],
             "chunks": [chunk.to_dict() for chunk in chunks],
+            "answer_source": "computed",
         }
 
     def _citation_for_fact(self, fact: RecipeFact, library: KnowledgeLibrary) -> Citation:

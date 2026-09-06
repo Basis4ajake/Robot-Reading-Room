@@ -23,17 +23,48 @@ def test_search_ranks_by_query_terms_found_in_the_chunk_text():
         _chunk("one-match", "This paragraph mentions chemistry once."),
         _chunk("two-match", "Chemistry is discussed here, and chemistry again."),
     ]
-    searcher = SimpleKeywordSearcher(chunks)
+    searcher = SimpleKeywordSearcher(lambda: chunks)
 
     results = searcher.search("chemistry", top_k=3)
 
-    assert [chunk.chunk_id for chunk in results] == ["two-match", "one-match", "no-match"]
+    assert [chunk.chunk_id for chunk in results] == ["two-match", "one-match"]
+
+
+def test_search_excludes_chunks_with_zero_matching_terms():
+    """A zero-score chunk contains none of the query's terms, so it's not
+    a match at all - it must not be padded into the results just to reach
+    top_k. This list now feeds Retriever.hybrid_search's reciprocal rank
+    fusion, which treats every returned chunk's position as a real
+    relevance signal; an unfiltered zero-score chunk would inject an
+    arbitrary insertion-order "rank" as if it were genuine evidence."""
+    chunks = [_chunk(f"c{i}", f"unrelated filler content number {i}") for i in range(5)]
+    searcher = SimpleKeywordSearcher(lambda: chunks)
+
+    results = searcher.search("nonexistentterm", top_k=5)
+
+    assert results == []
 
 
 def test_search_respects_top_k():
     chunks = [_chunk(f"c{i}", "keyword keyword keyword") for i in range(5)]
-    searcher = SimpleKeywordSearcher(chunks)
+    searcher = SimpleKeywordSearcher(lambda: chunks)
 
     results = searcher.search("keyword", top_k=2)
 
     assert len(results) == 2
+
+
+def test_search_reads_chunks_fresh_on_every_call():
+    """Cached inside AppState's per-library runtime (built once, reused
+    across many requests), so a static snapshot would silently go stale
+    after the next /ingest adds chunks - the same "quietly wrong after a
+    content change" bug class already found and fixed for embedding/
+    chunking signatures elsewhere in this project."""
+    chunks = [_chunk("c1", "keyword text")]
+    searcher = SimpleKeywordSearcher(lambda: chunks)
+
+    assert len(searcher.search("keyword", top_k=5)) == 1
+
+    chunks.append(_chunk("c2", "keyword text again"))
+
+    assert len(searcher.search("keyword", top_k=5)) == 2

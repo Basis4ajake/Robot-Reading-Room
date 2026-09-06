@@ -76,6 +76,12 @@ class ChatResponse(BaseModel):
     answer: str
     citations: List[Dict[str, Any]]
     chunks: List[Dict[str, Any]]
+    # "llm" (real Ollama model), "dummy" (DummyLLMProvider fallback - Ollama
+    # unavailable or LKL_FORCE_DUMMY), or "computed" (a deterministic
+    # aggregate-query answer, not LLM-generated at all). Long-standing gap:
+    # the GUI previously had no way to know an answer was fake without
+    # separately calling /health and /models and inferring it.
+    answer_source: str
 
 
 class ModelInfo(BaseModel):

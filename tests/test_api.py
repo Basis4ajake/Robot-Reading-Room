@@ -110,6 +110,7 @@ def test_source_ingest_and_chat_end_to_end(client, tmp_path):
     assert body["query"] == "What does the document say?"
     assert body["answer"]
     assert body["citations"]
+    assert body["answer_source"] == "dummy"
 
     sources_response = client.get("/api/v1/libraries/rag-lib/sources")
     assert len(sources_response.json()) == 1
@@ -179,6 +180,140 @@ def test_patch_returns_409_while_an_ingest_is_in_flight(client):
     response = client.patch("/api/v1/libraries/busy-lib", json={"top_k": 3})
     assert response.status_code == 200
     assert response.json()["top_k"] == 3
+
+
+def test_second_concurrent_ingest_returns_409(client):
+    """use_runtime() alone lets multiple callers hold a library's runtime
+    at once (needed so chat isn't blocked by a long ingest) - a second
+    /ingest for the SAME library must still be refused, since two ingests
+    racing on the same on-disk chunks.json/vectors.db would corrupt it.
+    Not reachable through the GUI (its ingest button disables itself
+    mid-request), only a direct API caller."""
+    client.post("/api/v1/libraries", json={"library_id": "busy-lib", "name": "Busy Lib"})
+    app_state = client.app.state.lkl
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_ingest_lock():
+        with app_state.ingest_lock("busy-lib"):
+            entered.set()
+            release.wait(timeout=5)
+
+    thread = threading.Thread(target=hold_ingest_lock)
+    thread.start()
+    try:
+        assert entered.wait(timeout=5), "ingest_lock never entered"
+        response = client.post("/api/v1/libraries/busy-lib/ingest")
+        assert response.status_code == 409
+    finally:
+        release.set()
+        thread.join(timeout=5)
+
+    # Free again once the in-flight ingest actually finishes.
+    response = client.post("/api/v1/libraries/busy-lib/ingest")
+    assert response.status_code == 200
+
+
+def test_create_rejects_embedding_model_not_locally_pulled(tmp_path):
+    # Real ollama.list() returns fully-qualified names, not bare ones -
+    # confirmed against a real local daemon (an untagged pull comes back
+    # as "nomic-embed-text:latest", not "nomic-embed-text").
+    ollama_module = types.SimpleNamespace(list=lambda: {"models": [{"model": "nomic-embed-text:latest"}]})
+    sys.modules["ollama"] = ollama_module
+    try:
+        app = create_app(data_dir=str(tmp_path / "libraries"), force_dummy=False)
+        with TestClient(app) as ollama_client:
+            response = ollama_client.post(
+                "/api/v1/libraries",
+                json={"library_id": "bad-embed", "name": "Bad", "embedding_model": "typo-model"},
+            )
+            assert response.status_code == 400
+            assert "typo-model" in response.json()["detail"]
+
+            response = ollama_client.post(
+                "/api/v1/libraries",
+                json={"library_id": "good-embed", "name": "Good", "embedding_model": "nomic-embed-text:latest"},
+            )
+            assert response.status_code == 201
+    finally:
+        del sys.modules["ollama"]
+
+
+def test_create_accepts_untagged_default_against_a_latest_tagged_pull(tmp_path):
+    """Regression test for a real bug caught before shipping: this
+    project's own default embedding_model ("nomic-embed-text", untagged)
+    would have been rejected by an exact-match-only check the moment a
+    real Ollama daemon was reachable, since ollama.list() reports it as
+    "nomic-embed-text:latest"."""
+    ollama_module = types.SimpleNamespace(list=lambda: {"models": [{"model": "nomic-embed-text:latest"}]})
+    sys.modules["ollama"] = ollama_module
+    try:
+        app = create_app(data_dir=str(tmp_path / "libraries"), force_dummy=False)
+        with TestClient(app) as ollama_client:
+            response = ollama_client.post(
+                "/api/v1/libraries",
+                json={"library_id": "lib", "name": "Lib", "embedding_model": "nomic-embed-text"},
+            )
+            assert response.status_code == 201
+    finally:
+        del sys.modules["ollama"]
+
+
+def test_create_still_rejects_a_mismatched_explicit_tag(tmp_path):
+    """The ":latest" fallback must not turn into stripping tags
+    generally - asking for a specific tag that isn't pulled (only a
+    different tag of the same model is) must still be rejected."""
+    ollama_module = types.SimpleNamespace(list=lambda: {"models": [{"model": "qwen3:8b"}]})
+    sys.modules["ollama"] = ollama_module
+    try:
+        app = create_app(data_dir=str(tmp_path / "libraries"), force_dummy=False)
+        with TestClient(app) as ollama_client:
+            response = ollama_client.post(
+                "/api/v1/libraries",
+                json={"library_id": "lib", "name": "Lib", "embedding_model": "qwen3:4b"},
+            )
+            assert response.status_code == 400
+    finally:
+        del sys.modules["ollama"]
+
+
+def test_update_rejects_embedding_model_not_locally_pulled(tmp_path):
+    ollama_module = types.SimpleNamespace(list=lambda: {"models": [{"model": "nomic-embed-text:latest"}]})
+    sys.modules["ollama"] = ollama_module
+    try:
+        app = create_app(data_dir=str(tmp_path / "libraries"), force_dummy=False)
+        with TestClient(app) as ollama_client:
+            ollama_client.post("/api/v1/libraries", json={"library_id": "lib", "name": "Lib"})
+            response = ollama_client.patch(
+                "/api/v1/libraries/lib", json={"embedding_model": "typo-model"}
+            )
+            assert response.status_code == 400
+    finally:
+        del sys.modules["ollama"]
+
+
+def test_embedding_model_validation_skipped_when_ollama_unreachable(tmp_path):
+    """Can't validate a model name against a daemon that isn't there -
+    must not block config changes just because Ollama happens to be
+    down (same reasoning as /models' own OllamaUnavailableError
+    handling)."""
+
+    def fake_list():
+        raise ConnectionError("no daemon")
+
+    ollama_module = types.SimpleNamespace(list=fake_list)
+    sys.modules["ollama"] = ollama_module
+    try:
+        app = create_app(data_dir=str(tmp_path / "libraries"), force_dummy=False)
+        with TestClient(app) as ollama_client:
+            response = ollama_client.post(
+                "/api/v1/libraries",
+                json={"library_id": "lib", "name": "Lib", "embedding_model": "anything-goes"},
+            )
+            assert response.status_code == 201
+    finally:
+        del sys.modules["ollama"]
 
 
 def test_models_endpoint_reports_unavailable_when_ollama_missing(tmp_path):

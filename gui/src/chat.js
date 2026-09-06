@@ -44,6 +44,17 @@ function appendMessage(query, result) {
   answerEl.textContent = result.answer;
   entry.appendChild(answerEl);
 
+  // Per-message ground truth from the server, not the library-level /health
+  // + /models guess the top-of-window "Demo mode" badge relies on - "llm"
+  // needs no badge (the normal case), "dummy"/"computed" get one so a fake
+  // or non-retrieved answer is never mistaken for a real one.
+  if (result.answer_source && result.answer_source !== "llm") {
+    const sourceBadge = document.createElement("span");
+    sourceBadge.className = "badge";
+    sourceBadge.textContent = result.answer_source === "dummy" ? "Demo answer" : "Computed answer";
+    entry.appendChild(sourceBadge);
+  }
+
   if (result.citations.length > 0) {
     const citationsEl = document.createElement("ul");
     citationsEl.className = "chat-citations";

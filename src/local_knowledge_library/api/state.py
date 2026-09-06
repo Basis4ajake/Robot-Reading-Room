@@ -8,7 +8,7 @@ from typing import Dict, Iterator
 from ..chunkers import ParagraphChunker
 from ..ingestion import IngestionPipeline
 from ..loaders import MarkdownLoader, PdfLoader, TextLoader
-from ..providers import SqliteVectorStore
+from ..providers import LexicalOverlapReranker, SimpleKeywordSearcher, SqliteVectorStore
 from ..providers.factory import build_providers
 from ..qa import GroundedQA
 from ..query_planner import QueryPlanner
@@ -30,6 +30,14 @@ class LibraryBusyError(RuntimeError):
     - use_runtime() (chat, ingest, source changes) refuses if a config
       update/delete is (briefly) in progress, for the same reason in
       reverse - it should be a rare, sub-second window in practice.
+    - ingest_lock() refuses a second /ingest call for a library that's
+      already mid-ingest. use_runtime() alone happily lets multiple
+      callers hold a library's runtime concurrently (that's the whole
+      point - chat shouldn't wait out a long ingest), which is fine for
+      read-only chat but not for two ingests racing on the same on-disk
+      state (chunks.json, vectors.db). Not reachable through the GUI
+      today (its ingest button disables itself while a request is in
+      flight), only a direct API caller.
     """
 
 
@@ -52,6 +60,8 @@ class AppState:
         # Per library_id: 0 = idle, >0 = N in-flight use_runtime() callers,
         # -1 = an exclusive() (config update/delete) is in progress.
         self._active_uses: Dict[str, int] = {}
+        # library_ids currently mid-/ingest - see ingest_lock().
+        self._ingesting: set[str] = set()
 
     @contextmanager
     def use_runtime(self, library_id: str) -> Iterator[LibraryRuntime]:
@@ -103,6 +113,25 @@ class AppState:
             with self._lock:
                 self._active_uses[library_id] = 0
 
+    @contextmanager
+    def ingest_lock(self, library_id: str) -> Iterator[None]:
+        """Refuses immediately (never blocks) if another /ingest call for
+        this same library is already in flight - see LibraryBusyError's
+        docstring for why this exists alongside use_runtime()/exclusive().
+        """
+        with self._lock:
+            if library_id in self._ingesting:
+                raise LibraryBusyError(
+                    f"Library {library_id!r} is already being ingested - wait for it to finish "
+                    "and try again."
+                )
+            self._ingesting.add(library_id)
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._ingesting.discard(library_id)
+
     def invalidate(self, library_id: str) -> None:
         """Close and drop the cached runtime, forcing a rebuild on next use.
 
@@ -124,6 +153,7 @@ class AppState:
             runtimes = list(self._runtimes.values())
             self._runtimes.clear()
             self._active_uses.clear()
+            self._ingesting.clear()
         for runtime in runtimes:
             runtime.vector_store.close()
 
@@ -139,7 +169,20 @@ class AppState:
         pipeline = IngestionPipeline(
             loaders, chunker, embedder, vector_store, debug=library.config.debug, llm_provider=llm_provider
         )
-        retriever = Retriever(vector_store=vector_store, embedder=embedder, debug=library.config.debug)
+        # Reads library.chunks fresh from disk on every search (see
+        # SimpleKeywordSearcher's docstring) rather than a snapshot from
+        # this runtime's build time, which would go stale after the next
+        # ingest since this runtime is cached and reused across requests.
+        keyword_searcher = SimpleKeywordSearcher(
+            lambda: self.registry.get_library(library_id).chunks.values()
+        )
+        retriever = Retriever(
+            vector_store=vector_store,
+            embedder=embedder,
+            keyword_searcher=keyword_searcher,
+            reranker=LexicalOverlapReranker(),
+            debug=library.config.debug,
+        )
         planner = QueryPlanner()
         qa = GroundedQA(retriever, planner, llm_provider, debug=library.config.debug)
 

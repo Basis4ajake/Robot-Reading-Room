@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (real reranker, RRF fusion, two documented gaps closed)
+
+### Added
+- `LexicalOverlapReranker`: replaces the never-wired `DummyReranker`/`None` in the default retrieval pipeline. Boosts candidates that literally contain the query's terms on top of whatever order semantic/hybrid search already produced, using a stable sort so ties (including zero overlap) keep their original relative order. Deliberately not an LLM call or a cross-encoder model - this project already measured a single grounded-QA request at ~2m20s on this CPU-only hardware, and a cross-encoder would pull in sentence-transformers/torch as new dependencies for a project that otherwise only talks to Ollama. Honest caveat: on the hybrid (default) path it reorders the same top-`k` that RRF's keyword leg already ranked using the identical term-overlap formula, so its marginal effect there is small - its main value is reordering `semantic_search()`'s output when used standalone (no keyword searcher / no RRF in play).
+- `Retriever.hybrid_search` now fuses semantic and keyword result lists by real reciprocal rank fusion (each chunk scored by the sum of `1/(60 + rank)` across every list it appears in) instead of the previous "semantic first, keyword fills remaining slots" union, which could never let keyword evidence promote a chunk over a weaker semantic-only match. Pulls a 2x-`top_k` candidate pool from each source before fusing so there's actually something to fuse. Fusion uses the RAW (unreranked) semantic order for its semantic leg, not `semantic_search()`'s reranked output - caught before shipping: feeding a lexically-reranked list into RRF as "the semantic signal" silently turns "fuse semantic + lexical" into "fuse lexical + lexical," burying genuine paraphrase-style matches with zero literal query-term overlap. The reranker, when configured, is applied after RRF has already picked the final top_k set (reordering only, not re-selecting) rather than before or over the full candidate pool.
+- `AppState.ingest_lock()`: a second concurrent `/ingest` call for the same library now gets a `409` instead of racing the first one on the same on-disk `chunks.json`/`vectors.db`. Not reachable through the GUI (its ingest button disables itself mid-request), only a direct API caller - but a real correctness gap, not a hypothetical one.
+- `POST/PATCH .../embedding_model` now validates the model name against locally pulled Ollama models before saving, returning a clear `400` on a typo instead of silently accepting it and only surfacing the problem at the next ingest attempt (`build_providers()`'s loud DummyEmbedder-fallback warning still covers a model removed/unpulled *after* being saved - this is strictly earlier, not a replacement). Skipped entirely when Ollama isn't reachable, matching `/models`' own `force_dummy`/`OllamaUnavailableError` handling. Verified against the real local Ollama daemon, which caught a real bug before it shipped: `ollama.list()` reports fully-qualified names (`nomic-embed-text:latest`), so an exact-match-only check would have rejected this project's own untagged default (`nomic-embed-text`) the instant Ollama was actually reachable - fixed to also accept `name + ":latest"` without stripping tags generally (a mismatched explicit tag, e.g. `qwen3:4b` when only `qwen3:8b` is pulled, is still correctly rejected).
+
+### Fixed
+- `SimpleKeywordSearcher.search()` had no zero-score filter, so it always padded its result up to `top_k` with chunks that matched none of the query's terms - harmless when nothing used the list meaningfully, but a real regression risk now that it feeds `hybrid_search`'s RRF: an unfiltered zero-score chunk got a real reciprocal-rank score from its arbitrary position in a same-score stable sort, letting content matching nothing outrank a genuine semantic match. Now excludes zero-score chunks. Caught by a real `SimpleKeywordSearcher` + `InMemoryVectorStore` test (not a stub) using a query term present in none of the chunks.
+
+114/114 tests passing.
+
+## [Unreleased] - 2026-09-06 (answer_source + hybrid search wired in)
+
+### Added
+- `ChatResponse.answer_source`: `"llm"` (real Ollama answer), `"dummy"` (fallback), or `"computed"` (deterministic aggregate-query answer, no LLM call). Closes the long-standing "no field distinguishing a real answer from the dummy fallback" gap. GUI shows a small badge for anything other than `"llm"`.
+- `SimpleKeywordSearcher`/hybrid search wired into the default retrieval pipeline: semantic results first, keyword results fill remaining `top_k` slots. Rewired `SimpleKeywordSearcher` to read chunks fresh on every search (a callable, not a cached list) since it lives inside `AppState`'s per-library runtime cache and a static snapshot would have gone stale after the next ingest - verified against the real `AppState` class, not just a unit test.
+
+### Fixed
+- `Retriever.hybrid_search` took separate `top_k_semantic`/`top_k_keyword` and unioned both result sets in full, which could silently return up to 2x `top_k` chunks. Now takes one `top_k` and caps the combined result at it. Not previously called by anything, so no external behavior changed.
+
+100/100 tests passing.
+
 ## [Unreleased] - 2026-09-06 (second low-overhead sweep, fresh eyes)
 
 ### Fixed

@@ -1,9 +1,20 @@
+from local_knowledge_library.abstracts import LLMProvider
 from local_knowledge_library.models import Chunk, LibraryConfig, RecipeFact, StructureMetadata
 from local_knowledge_library.providers.ollama_providers import DummyEmbedder, DummyLLMProvider, InMemoryVectorStore
 from local_knowledge_library.query_planner import QueryPlanner
 from local_knowledge_library.qa import GroundedQA
 from local_knowledge_library.retrieval import Retriever
 from local_knowledge_library.storage import KnowledgeLibrary
+
+
+class _FakeRealLLM(LLMProvider):
+    """Stands in for a real (non-dummy) LLMProvider, e.g. OllamaQwenProvider."""
+
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
+        return "A real-looking answer."
+
+    def embed_text(self, texts):
+        raise NotImplementedError
 
 
 def test_grounded_qa_builds_prompt(tmp_path):
@@ -25,6 +36,26 @@ def test_grounded_qa_builds_prompt(tmp_path):
     assert result["query"] == "What is this?"
     assert "citations" in result
     assert result["answer"].startswith("This is a dummy response")
+    assert result["answer_source"] == "dummy"
+
+
+def test_answer_query_reports_llm_source_for_a_real_provider(tmp_path):
+    """The long-standing gap: ChatResponse had no field distinguishing a
+    real LLM answer from the DummyLLMProvider fallback."""
+    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    chunk = Chunk(
+        chunk_id="chunk-1", library_id="test-lib", source_id="source-1", document_id="doc-1",
+        text="Example evidence text.", metadata={"page_number": "1"}, citation_id="cite-1",
+    )
+    library.register_chunk(chunk)
+    retriever = Retriever(vector_store=InMemoryVectorStore(), embedder=DummyEmbedder())
+    qa = GroundedQA(retriever=retriever, query_planner=QueryPlanner(), llm_provider=_FakeRealLLM())
+
+    result = qa.answer_query("What is this?", library=library, top_k=1)
+
+    assert result["answer_source"] == "llm"
+    assert result["answer"] == "A real-looking answer."
 
 
 def _make_qa(library):
@@ -62,6 +93,7 @@ def test_answer_query_computes_fewest_ingredients_deterministically(tmp_path):
     assert result["citations"][0]["section"] == "Bread Soup"
     assert len(result["chunks"]) == 1
     assert "Soak bread in broth" in result["chunks"][0]["text"]
+    assert result["answer_source"] == "computed"
 
 
 def test_answer_query_lists_all_tied_recipes(tmp_path):
@@ -143,6 +175,7 @@ def test_answer_query_refuses_cost_questions_honestly(tmp_path):
     assert "can't answer" in result["answer"].lower()
     assert result["citations"] == []
     assert result["chunks"] == []
+    assert result["answer_source"] == "computed"
 
 
 def test_answer_query_handles_missing_recipe_data_gracefully(tmp_path):
@@ -154,6 +187,7 @@ def test_answer_query_handles_missing_recipe_data_gracefully(tmp_path):
 
     assert "doesn't have recipe data" in result["answer"]
     assert result["citations"] == []
+    assert result["answer_source"] == "computed"
 
 
 def test_answer_query_ignores_plain_ingredient_mentions_without_superlative(tmp_path):
