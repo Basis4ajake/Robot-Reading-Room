@@ -27,7 +27,22 @@ def test_search_ranks_by_query_terms_found_in_the_chunk_text():
 
     results = searcher.search("chemistry", top_k=3)
 
-    assert [chunk.chunk_id for chunk in results] == ["two-match", "one-match", "no-match"]
+    assert [chunk.chunk_id for chunk in results] == ["two-match", "one-match"]
+
+
+def test_search_excludes_chunks_with_zero_matching_terms():
+    """A zero-score chunk contains none of the query's terms, so it's not
+    a match at all - it must not be padded into the results just to reach
+    top_k. This list now feeds Retriever.hybrid_search's reciprocal rank
+    fusion, which treats every returned chunk's position as a real
+    relevance signal; an unfiltered zero-score chunk would inject an
+    arbitrary insertion-order "rank" as if it were genuine evidence."""
+    chunks = [_chunk(f"c{i}", f"unrelated filler content number {i}") for i in range(5)]
+    searcher = SimpleKeywordSearcher(lambda: chunks)
+
+    results = searcher.search("nonexistentterm", top_k=5)
+
+    assert results == []
 
 
 def test_search_respects_top_k():

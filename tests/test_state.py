@@ -106,6 +106,50 @@ def test_exclusive_does_not_leave_library_stuck_busy_after_an_error(tmp_path):
         pass
 
 
+def test_ingest_lock_raises_busy_while_another_ingest_is_in_flight(tmp_path):
+    state = _make_state(tmp_path)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_ingest_lock():
+        with state.ingest_lock("lib-a"):
+            entered.set()
+            release.wait(timeout=5)
+
+    thread = threading.Thread(target=hold_ingest_lock)
+    thread.start()
+    try:
+        assert entered.wait(timeout=5), "ingest_lock never entered"
+        try:
+            with state.ingest_lock("lib-a"):
+                assert False, "expected LibraryBusyError for a second concurrent ingest"
+        except LibraryBusyError:
+            pass
+        # A different library's ingest is unaffected.
+        with state.ingest_lock("lib-b"):
+            pass
+    finally:
+        release.set()
+        thread.join(timeout=5)
+
+    # Free again once the first ingest actually finishes.
+    with state.ingest_lock("lib-a"):
+        pass
+
+
+def test_ingest_lock_releases_after_an_error(tmp_path):
+    state = _make_state(tmp_path)
+
+    try:
+        with state.ingest_lock("lib-a"):
+            raise ValueError("simulated ingest failure")
+    except ValueError:
+        pass
+
+    with state.ingest_lock("lib-a"):
+        pass
+
+
 def test_invalidate_closes_and_drops_the_cached_runtime(tmp_path):
     state = _make_state(tmp_path)
     with state.use_runtime("lib-a") as runtime:

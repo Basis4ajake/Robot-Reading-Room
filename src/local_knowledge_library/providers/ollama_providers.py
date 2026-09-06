@@ -242,7 +242,17 @@ class SimpleKeywordSearcher:
         for chunk in self.chunks_provider():
             chunk_text = chunk.text.lower()
             score = sum(chunk_text.count(term) for term in terms)
-            scored.append((score, chunk))
+            # A zero-score chunk contains none of the query's terms - not a
+            # weak match, not a match at all. Excluding it matters more
+            # than it used to: this list now feeds Retriever.hybrid_search's
+            # reciprocal rank fusion, which treats every returned chunk's
+            # position as a real relevance signal. Padding to top_k with
+            # irrelevant chunks (previously harmless filler when nothing
+            # else used this list meaningfully) would hand RRF a chunk's
+            # arbitrary insertion-order position as if it were a genuine
+            # rank, inflating its fused score with pure noise.
+            if score > 0:
+                scored.append((score, chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
         return [chunk for _, chunk in scored[:top_k]]
 
@@ -250,3 +260,31 @@ class SimpleKeywordSearcher:
 class DummyReranker:
     def rerank(self, query: str, candidates: Sequence["Chunk"]):
         return candidates
+
+
+class LexicalOverlapReranker:
+    """Boosts candidates that literally contain the query's terms, on top
+    of whatever order semantic search (or hybrid fusion) already produced.
+
+    Deliberately not an LLM call: this project already measured a single
+    grounded-QA request at ~2m20s on this CPU-only hardware (see the
+    num_ctx investigation), so adding a second full LLM call per query
+    just to rerank would be a real, non-trivial latency cost, not a free
+    quality win. A cross-encoder model was also considered and rejected -
+    it would pull in sentence-transformers/torch as new dependencies for
+    a project that otherwise only talks to Ollama.
+
+    Uses a stable sort, so candidates with equal (including zero) overlap
+    keep their original relative order rather than being shuffled.
+    """
+
+    def rerank(self, query: str, candidates: Sequence["Chunk"]) -> Sequence["Chunk"]:
+        terms = query.lower().split()
+        if not terms:
+            return candidates
+
+        def overlap_score(chunk: "Chunk") -> int:
+            chunk_text = chunk.text.lower()
+            return sum(chunk_text.count(term) for term in terms)
+
+        return sorted(candidates, key=overlap_score, reverse=True)
