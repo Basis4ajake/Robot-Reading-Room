@@ -30,7 +30,10 @@
   - `LibraryRegistry` manages the set of libraries under a data directory: create, list, open, update config, delete.
 
 - `src/local_knowledge_library/api/`
-  - A FastAPI service exposing the library, ingestion, and QA layers over HTTP for a future GUI. `app.py` builds the app and owns an `AppState` (the registry plus a small cache of per-library vector store/retriever/QA instances). Routers live under `api/routers/`: `libraries`, `sources`, `chat`, `models`, `health`. Run with `python -m local_knowledge_library.api`.
+  - A FastAPI service exposing the library, ingestion, and QA layers over HTTP for the Tauri GUI (`gui/`) and any `curl`/scripting use. `app.py` builds the app and owns an `AppState` (the registry plus a small cache of per-library vector store/retriever/QA instances, with no concurrency locking — see docs/how_to_use.md §13). Routers live under `api/routers/`: `libraries`, `sources`, `chat`, `models`, `health`. Run with `python -m local_knowledge_library.api`.
+
+- `gui/`
+  - The Tauri desktop GUI: a plain HTML/JS/CSS frontend (`gui/src/`, no framework/build step) served directly by Tauri's webview, plus a thin Rust shell (`gui/src-tauri/`) for the native window, file-picker dialog, and opening external links in the system browser. Talks to the API above over `fetch()`. See `gui/README.md`.
 
 ## Data Directory
 
@@ -45,9 +48,13 @@ data/libraries/{library_id}/
   sources.json
   documents.json
   chunks.json
+  state.json       # per-source/document content hashes, plus embedding_signature
+                    # and chunking_signature (which model/config last built the index)
   indexes/
-  source_files/
+    vectors.db      # SqliteVectorStore
 ```
+
+Sources are referenced by their original absolute path on disk (`add_source`), not copied into the library directory — there is no `source_files/`.
 
 `config.json` persists the library's `LibraryConfig` (model choice, chunk settings, top_k) so it survives across process restarts and API calls — it is the source of truth once a library has been created; `KnowledgeLibrary.open()` loads it and ignores an in-memory config passed by the caller.
 

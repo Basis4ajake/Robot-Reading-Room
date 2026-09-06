@@ -8,14 +8,15 @@ This repository is an early MVP for a local, modular Retrieval-Augmented Generat
 
 - Knowledge Library creation and management
 - Library isolation and local storage
-- Text and markdown ingestion
-- Incremental indexing by content hash
-- A local provider abstraction layer for loaders, chunkers, embedders, vector stores, and LLMs
-- Grounded answer generation with citation tracking
-- In-memory and persistent SQLite vector search
+- Text, Markdown, and PDF ingestion (PDF via PyPDF2, with per-page citation tracking)
+- Incremental indexing by content hash, with automatic detection/recovery if a library's embedding model or chunking configuration changes since it was last indexed
+- A local provider abstraction layer for loaders, chunkers, embedders, vector stores, and LLMs, backed by real local Ollama models (chat + embedding) with a dummy fallback for trying the app without Ollama running
+- Grounded answer generation with citation tracking, including accurate per-chunk page numbers for PDFs
+- Persistent SQLite vector search (the in-memory store exists too, but only for tests)
 - A FastAPI service layer exposing library management, ingestion, model listing, and chat over HTTP (see section 9)
+- A Tauri desktop GUI built on that API — library management, sources/ingestion, and chat from a native window (see section 10)
 - Persistent per-library configuration (model choice, chunk settings)
-- Basic automated tests
+- Automated tests (44 and growing)
 
 Planned future improvements are noted at the end of this document.
 
@@ -208,7 +209,24 @@ Per-library configuration (`llm_model`, `embedding_model`, `chunk_size`, `chunk_
 
 Not yet implemented: streaming chat responses, authentication (fine for a single local user, not for anything exposed beyond localhost), and `ollama pull` model downloading through the API.
 
-## 10. Debug Mode
+## 10. Using the GUI
+
+A Tauri desktop app (`gui/`) is the primary way to use this project day-to-day instead of `curl`/Python — it's a native window wrapping the same API described in section 9, so the backend must be running first.
+
+1. Start the backend (section 9): `python -m local_knowledge_library.api`
+2. From `gui/`, run `npm run tauri dev` (first run installs Rust/Tauri build dependencies if they aren't already present; see `gui/README.md`).
+
+From the window you can:
+
+- See live backend/Ollama status and locally pulled models (top of the window).
+- Create, edit, and delete libraries, including model choice (LLM + embedding model, with curated suggestions and a "Browse models ↗" link to Ollama's catalog) and chunk_size/chunk_overlap/top_k.
+- Add sources via a native file picker, and run ingestion with processed/skipped/removed counts.
+- Chat with a library and see the answer alongside its citations and (expandable) the raw retrieved chunks — a "demo mode" badge appears if Ollama/a real model isn't actually available, so a dummy answer is never mistaken for a real one.
+- Toggle an optional "Bendy Toon" claymation theme (persisted per-browser via `localStorage`); the default theme follows your OS light/dark setting.
+
+Not yet in the GUI: streaming responses (the backend doesn't support it yet either — see section 9), and multi-window/tabbed navigation (everything for an open library — its settings, sources, and chat — appears inline on one screen).
+
+## 11. Debug Mode
 
 A debug mode is available to inspect pipeline flow and detect which stage may be responsible for a weak answer.
 
@@ -220,7 +238,7 @@ Enable debug via configuration or constructor flags on the classes. In debug mod
 - prompt assembly
 - citation resolution
 
-## 11. Running Tests
+## 12. Running Tests
 
 Run the available tests with:
 
@@ -236,30 +254,31 @@ Current test coverage includes:
 - citation/provenance integrity
 - library persistence and isolation
 
-## 12. Work-in-Progress Notes
+## 13. Work-in-Progress Notes
 
 This guide is intentionally written as an incrementally updated document.
 
 Current limitations:
 
-- Only basic text and markdown loaders are scaffolding examples
-- PDF ingestion is conceptual and may require additional parser wiring
-- In-memory vector store is suitable for testing, not large collections
-- Ollama/Qwen integration is provided as an adapter stub and depends on local Ollama SDK availability
-- Query planning is rule-based and designed to grow over time
+- Text, Markdown, and PDF loaders are implemented and in real use (not scaffolding); EPUB/DOCX/HTML/OCR are not.
+- Chunking is paragraph/page-based with word-count sub-splitting (`chunk_size`/`chunk_overlap`) — not yet chapter/section-aware.
+- Ollama integration is real (not a stub) and depends on the local Ollama SDK/daemon being available; a dummy fallback exists for trying the app without Ollama, and now warns loudly (rather than substituting silently) when it's used unintentionally.
+- Query planning is rule-based and designed to grow over time.
+- `SimpleKeywordSearcher`/hybrid search and a real reranker (`DummyReranker` is currently a no-op passthrough) exist as interfaces but aren't wired into the default pipeline.
+- `AppState`'s per-library runtime cache has no concurrency locking — concurrent requests to the same library (e.g. an ingest and a config update at the same time) can race.
 
 Future improvements planned for the next iterations:
 
 - EPUB/DOCX/HTML and OCR-based loaders
-- Structure-aware chunking by chapter/section
+- Structure-aware chunking by chapter/section (page-level is done; chapter/section is not)
 - Keyword, hybrid, and reciprocal rank fusion search
 - Configurable rerankers
-- Persistent local vector indexes
 - Export/import of libraries
 - Research workspace workflows
 - Evaluation and RAG benchmarking
+- Streaming chat responses; a `ChatResponse` field distinguishing a real answer from the dummy/degraded fallback (currently only inferable via `/health` + `/models`)
 
-## 13. Contribution and Extension
+## 14. Contribution and Extension
 
 If you extend this project, follow these guidelines:
 

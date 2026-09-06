@@ -18,16 +18,16 @@ Local Knowledge Library is designed to let users create private, self-contained 
 
 ## Recent updates
 
-- Added a FastAPI service layer (`python -m local_knowledge_library.api`) exposing library management, ingestion, model listing, and chat over HTTP, plus persistent per-library configuration — the foundation the planned GUI control center will sit on.
+- Added a Tauri desktop GUI (`gui/`) — library management, source/ingestion, and chat all driven from a native window instead of `curl`/Python. See `gui/README.md` to run it.
+- Fixed several correctness bugs found via real usage: libraries could silently index fake (non-semantic) vectors if `embedding_model` was unset or the embedder failed; PDF chunk citations could all cite the wrong page; `chunk_size`/`chunk_overlap` were read by the GUI but had no effect on ingestion. All three are fixed, with automatic detection/recovery if a library's index goes stale (e.g. after a model or chunking config change).
+- Added a FastAPI service layer (`python -m local_knowledge_library.api`) exposing library management, ingestion, model listing, and chat over HTTP, plus persistent per-library configuration.
 - Fixed incremental ingestion and source change detection so unchanged documents are skipped and deleted content is cleaned up.
 - Corrected `KnowledgeLibrary.open()` state loading and removed duplicate `remove_source()` behavior.
-- Added `src/local_knowledge_library/providers/__init__.py` for package imports.
-- Updated packaging and `pytest` configuration for `src` package discovery.
-- Cleaned Python cache artifacts and verified the repo with `7 passed` test results.
 
 ## Repository Layout
 
-- `src/` — application code
+- `src/` — application code (backend: ingestion, chunking, embedding, retrieval, grounded QA, FastAPI service layer)
+- `gui/` — the Tauri desktop GUI (plain HTML/JS/CSS frontend + Rust shell); see `gui/README.md`
 - `tests/` — automated tests
 - `docs/` — architecture and implementation notes
 - `data/` — local library data (excluded from git)
@@ -58,7 +58,14 @@ This repository is public-source friendly. All user library contents, extracted 
 python -m pip install -e ".[dev]"
 ```
 
-3. Create or open a library in code or with future CLI support.
+3. Make sure [Ollama](https://ollama.com) is installed and running, with at least one chat model and one embedding-capable model pulled (e.g. `ollama pull qwen2:1.5b` and `ollama pull nomic-embed-text`). The app runs with fake/dummy responses if Ollama isn't available, which is fine for trying it out but not for real use.
+4. Start the backend:
+
+```bash
+python -m local_knowledge_library.api
+```
+
+5. Either drive it via `curl`/the HTTP API (see `docs/how_to_use.md` §9), or run the desktop GUI — see `gui/README.md`.
 
 ## Architecture Overview
 

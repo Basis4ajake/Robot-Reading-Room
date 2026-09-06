@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-05 (Phase 5)
+
+### Added
+- Loading feedback ("Creating...", "Saving...", "Deleting...") on the library Create/Save/Delete buttons while their requests are in flight, matching the pattern chat/ingest already used. Verified end-to-end with a real browser against the real backend.
+
+### Changed
+- Refreshed `README.md`, `gui/README.md` (was still the generic Tauri template), `docs/how_to_use.md`, and `docs/architecture.md` to reflect that the GUI exists and is the primary way to use the app, and to correct several stale/wrong claims (PDF ingestion and Ollama integration were described as stubs; they're both real; the documented `data/libraries/{id}/` layout was missing `state.json` and listed a `source_files/` directory that doesn't exist).
+
 ## [Unreleased] - 2026-09-05
 
 ### Fixed
