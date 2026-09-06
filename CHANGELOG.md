@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-06 (retrieval regression check)
+
+### Added
+- `scripts/eval_retrieval.py` + `scripts/retrieval_eval_corpus.txt`: a small fixed-question retrieval regression check using real Ollama embeddings, for the failure class the fast dummy-provider `pytest` suite can't catch by design - a chunking/embedding change that runs without error but silently surfaces the wrong chunks (the actual root cause of three separate real bugs found by hand earlier this session). Refuses to run rather than report a false result if Ollama isn't reachable. Documented in `docs/how_to_use.md` §12.
+
 ## [Unreleased] - 2026-09-06 (PDF extraction)
 
 ### Changed

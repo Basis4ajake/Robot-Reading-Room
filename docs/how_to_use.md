@@ -254,6 +254,14 @@ Current test coverage includes:
 - citation/provenance integrity
 - library persistence and isolation
 
+`pytest` uses dummy providers throughout, deliberately, so it runs fast with no external dependency. That means it cannot catch a real retrieval-quality regression - e.g. a chunking or embedding-model change that still runs without error but quietly surfaces the wrong chunks. For that, run:
+
+```bash
+python scripts/eval_retrieval.py
+```
+
+This ingests a small fixed corpus (`scripts/retrieval_eval_corpus.txt`) with real Ollama embeddings and checks that a fixed set of unambiguous questions still retrieve the chunk they should. It refuses to run (rather than report a false result) if Ollama isn't reachable. Run it after touching chunking, embedding config, or retrieval code - this exact failure mode (looks fine, silently wrong) has been the majority of real bugs found in this project so far.
+
 ## 13. Work-in-Progress Notes
 
 This guide is intentionally written as an incrementally updated document.
