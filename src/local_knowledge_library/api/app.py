@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import chat, health, libraries, models, sources
+# Aliased: "eval" would shadow the eval() builtin in this module's namespace.
+from .routers import eval as eval_router
 from .state import AppState
 
 
@@ -41,5 +43,6 @@ def create_app(data_dir: str | None = None, force_dummy: bool | None = None) -> 
     app.include_router(libraries.router)
     app.include_router(sources.router)
     app.include_router(chat.router)
+    app.include_router(eval_router.router)
 
     return app

@@ -16,9 +16,10 @@ This repository is an early MVP for a local, modular Retrieval-Augmented Generat
 - `answer_source` on every chat response ("llm"/"dummy"/"computed") so a real answer is never mistaken for a fallback or vice versa
 - Persistent SQLite vector search (the in-memory store exists too, but only for tests)
 - A FastAPI service layer exposing library management, ingestion, model listing, and chat over HTTP (see section 9)
-- A Tauri desktop GUI built on that API — library management, sources/ingestion, and chat from a native window (see section 10)
+- A Tauri desktop GUI built on that API — library management, sources/ingestion, chat, and evaluation from a native window (see section 10)
+- Per-library evaluation: user-defined regression questions run for real through the chat pipeline, with history kept across runs so quality changes as chunking/models change are visible, not just assumed (see section 9)
 - Persistent per-library configuration (model choice, chunk settings)
-- Automated tests (100 and growing)
+- Automated tests (127 and growing)
 
 Planned future improvements are noted at the end of this document.
 
@@ -190,6 +191,9 @@ Key endpoints, all under `/api/v1`:
 - `GET /libraries/{id}/sources`, `POST /libraries/{id}/sources`, `DELETE /libraries/{id}/sources/{source_id}` — manage sources by local file path
 - `POST /libraries/{id}/ingest` — run incremental ingestion
 - `POST /libraries/{id}/chat` — ask a grounded question, returns the answer plus citations and retrieved chunks
+- `GET /libraries/{id}/eval-cases`, `POST /libraries/{id}/eval-cases`, `DELETE /libraries/{id}/eval-cases/{eval_case_id}` — manage a library's own regression questions (a question plus a keyword expected in a correct answer)
+- `POST /libraries/{id}/evaluate` — run every stored eval case for real through the same chat pipeline, record the result as a new run, and return it
+- `GET /libraries/{id}/eval-runs` — evaluation run history, newest first, each stamped with the config (`chunk_size`/`chunk_overlap`/`top_k`/`llm_model`/`embedding_model`) it ran under
 
 Example end-to-end session:
 
@@ -226,6 +230,7 @@ From the window you can:
 - Create, edit, and delete libraries, including model choice (LLM + embedding model, with curated suggestions and a "Browse models ↗" link to Ollama's catalog) and chunk_size/chunk_overlap/top_k.
 - Add sources via a native file picker, and run ingestion with processed/skipped/removed counts.
 - Chat with a library and see the answer alongside its citations and (expandable) the raw retrieved chunks — a "demo mode" badge appears if Ollama/a real model isn't actually available, so a dummy answer is never mistaken for a real one.
+- Define your own regression questions for a library (Evaluation section) and run them on demand, keeping a history of past runs so you can see whether a chunking or model change made answers better or worse over time. Each run checks two things separately: whether the expected keyword actually showed up in the retrieved evidence (the reliable signal — this is what regresses when retrieval itself breaks) and whether it showed up in the LLM's free-form answer text (a looser signal, since a correct answer can still paraphrase away the exact word).
 - Toggle an optional "Bendy Toon" claymation theme (persisted per-browser via `localStorage`); the default theme follows your OS light/dark setting.
 
 Not yet in the GUI: streaming responses (the backend doesn't support it yet either — see section 9), and multi-window/tabbed navigation (everything for an open library — its settings, sources, and chat — appears inline on one screen).

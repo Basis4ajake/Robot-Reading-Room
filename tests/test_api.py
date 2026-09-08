@@ -120,6 +120,78 @@ def test_source_ingest_and_chat_end_to_end(client, tmp_path):
     assert client.get("/api/v1/libraries/rag-lib/sources").json() == []
 
 
+def test_eval_case_lifecycle_and_run_history(client, tmp_path):
+    client.post("/api/v1/libraries", json={"library_id": "eval-lib", "name": "Eval Library"})
+
+    source_file = tmp_path / "example.txt"
+    source_file.write_text("Hello world. This is a simple knowledge base entry.", encoding="utf-8")
+    client.post("/api/v1/libraries/eval-lib/sources", json={"source_path": str(source_file)})
+    client.post("/api/v1/libraries/eval-lib/ingest")
+
+    assert client.get("/api/v1/libraries/eval-lib/eval-cases").json() == []
+
+    create_response = client.post(
+        "/api/v1/libraries/eval-lib/eval-cases",
+        json={"question": "What does the document say?", "expected_keyword": "hello"},
+    )
+    assert create_response.status_code == 201
+    case = create_response.json()
+    assert case["question"] == "What does the document say?"
+
+    list_response = client.get("/api/v1/libraries/eval-lib/eval-cases")
+    assert len(list_response.json()) == 1
+
+    assert client.get("/api/v1/libraries/eval-lib/eval-runs").json() == []
+
+    run_response = client.post("/api/v1/libraries/eval-lib/evaluate")
+    assert run_response.status_code == 200
+    run = run_response.json()
+    assert run["total_count"] == 1
+    assert run["llm_model"] == "qwen2:1.5b"
+    assert run["chunk_size"] == 300
+    assert len(run["results"]) == 1
+    assert run["results"][0]["expected_keyword"] == "hello"
+    # force_dummy fixture means DummyLLMProvider/DummyEmbedder, so this only
+    # proves the plumbing works end-to-end - not that retrieval is accurate.
+    assert run["results"][0]["answer_source"] == "dummy"
+
+    history_response = client.get("/api/v1/libraries/eval-lib/eval-runs")
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert len(history) == 1
+    assert history[0]["eval_run_id"] == run["eval_run_id"]
+
+    delete_response = client.delete(f"/api/v1/libraries/eval-lib/eval-cases/{case['eval_case_id']}")
+    assert delete_response.status_code == 204
+    assert client.get("/api/v1/libraries/eval-lib/eval-cases").json() == []
+    # Removing a case doesn't retroactively erase past runs - history stores
+    # question/expected_keyword by value, not a live reference to the case.
+    assert len(client.get("/api/v1/libraries/eval-lib/eval-runs").json()) == 1
+
+
+def test_evaluate_with_no_cases_returns_empty_run(client):
+    client.post("/api/v1/libraries", json={"library_id": "eval-lib3", "name": "Eval Library 3"})
+
+    response = client.post("/api/v1/libraries/eval-lib3/evaluate")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_count"] == 0
+    assert body["passed_count"] == 0
+    assert body["results"] == []
+
+
+def test_evaluate_returns_404_for_unknown_library(client):
+    response = client.post("/api/v1/libraries/nope/evaluate")
+    assert response.status_code == 404
+
+
+def test_remove_unknown_eval_case_returns_404(client):
+    client.post("/api/v1/libraries", json={"library_id": "eval-lib2", "name": "Eval Library 2"})
+    response = client.delete("/api/v1/libraries/eval-lib2/eval-cases/does-not-exist")
+    assert response.status_code == 404
+
+
 def test_create_rejects_non_positive_chunk_size(client):
     """chunk_size <= 0 used to be silently accepted and treated as "don't
     sub-split at all" (ParagraphChunker._split_to_size) rather than

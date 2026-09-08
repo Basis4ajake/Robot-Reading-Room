@@ -41,7 +41,26 @@ class GroundedQA:
         # independently of `plan` (which is just a cosmetic label for the
         # prompt) so this can't be silently skipped by a query that doesn't
         # happen to match the planner's own separate keyword list.
-        aggregate_plan = interpret_aggregate_query(query)
+        #
+        # Gated on enable_recipe_extraction: interpret_aggregate_query()
+        # matches on bare superlative words ("longest", "highest", "most",
+        # "easiest", ...) with no recipe-specific requirement, so an
+        # ungated check would misroute an ordinary question like "What is
+        # the longest river in the world?" into a recipe-only refusal for
+        # every library, not just cookbooks - confirmed for real building
+        # the eval-history feature, whose own regression questions tripped
+        # this. A library that never opted into recipe extraction has no
+        # aggregate facts to answer from in the first place, so it should
+        # never intercept a query at all. The flag is the single source of
+        # truth for this decision (not "does recipe_facts have any rows"):
+        # a user who explicitly turns extraction back off is choosing to
+        # disable the feature, even if stale facts remain on disk from an
+        # earlier ingest. Does NOT fix bare-superlative false positives
+        # *within* an opted-in cookbook library (e.g. "hardest"/"quick"/
+        # "easy" in _MAX_KEYWORDS/_STEP_KEYWORDS still misfire on an
+        # ordinary in-book question) - that's recipe_extraction.py's
+        # keyword-list precision, a separate, still-open gap.
+        aggregate_plan = interpret_aggregate_query(query) if library.config.enable_recipe_extraction else None
         if aggregate_plan is not None:
             return self._answer_aggregate_query(query, plan, aggregate_plan, library)
 

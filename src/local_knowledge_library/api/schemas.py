@@ -84,6 +84,47 @@ class ChatResponse(BaseModel):
     answer_source: str
 
 
+class EvalCaseCreateRequest(BaseModel):
+    question: str
+    expected_keyword: str
+
+
+class EvalCaseResponse(BaseModel):
+    eval_case_id: str
+    question: str
+    expected_keyword: str
+
+
+class EvalResultResponse(BaseModel):
+    eval_case_id: str
+    question: str
+    expected_keyword: str
+    # The headline pass/fail: whether expected_keyword actually appeared in
+    # the retrieved evidence (chunks/citations), not the free-form LLM
+    # answer text - see EvalResult's docstring for why these are tracked
+    # separately.
+    keyword_in_citations: bool
+    keyword_in_answer: bool
+    answer: str
+    answer_source: str
+    citation_count: int
+
+
+class EvalRunResponse(BaseModel):
+    eval_run_id: str
+    timestamp: str
+    # The config this run executed under - two runs' pass counts are only
+    # comparable if you know whether settings changed between them.
+    chunk_size: int
+    chunk_overlap: int
+    top_k: int
+    llm_model: str
+    embedding_model: Optional[str]
+    passed_count: int
+    total_count: int
+    results: List[EvalResultResponse]
+
+
 class ModelInfo(BaseModel):
     name: Optional[str]
     size: Optional[int]
