@@ -241,3 +241,30 @@ def test_answer_query_ignores_superlatives_when_recipe_extraction_disabled(tmp_p
 
     assert result["answer_source"] != "computed"
     assert "doesn't have recipe data" not in result["answer"]
+
+
+def test_answer_query_ignores_bare_superlatives_without_a_recipe_anchor(tmp_path):
+    """Even in a library that HAS recipe extraction enabled, an ordinary
+    in-book question using a bare superlative word ("quickest") but never
+    asking to compare recipes must not get the cross-recipe aggregate
+    treatment - a real false positive found via the eval-history feature."""
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
+    library = KnowledgeLibrary.create(config)
+    library.register_recipe_facts("doc-1", [
+        RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
+                   recipe_name="A", ingredients=["x"], step_count=1),
+    ])
+    chunk = Chunk(
+        chunk_id="chunk-1", library_id="test-lib", source_id="source-1", document_id="doc-1",
+        text="The quickest way to knead dough is to use the heel of your hand.",
+        metadata={"page_number": "1"}, citation_id="cite-1",
+    )
+    library.register_chunk(chunk)
+
+    qa = _make_qa(library)
+    result = qa.answer_query("What's the quickest way to knead this dough?", library=library, top_k=1)
+
+    assert result["answer_source"] != "computed"
+    assert "doesn't have recipe data" not in result["answer"]

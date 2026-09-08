@@ -55,11 +55,13 @@ class GroundedQA:
         # truth for this decision (not "does recipe_facts have any rows"):
         # a user who explicitly turns extraction back off is choosing to
         # disable the feature, even if stale facts remain on disk from an
-        # earlier ingest. Does NOT fix bare-superlative false positives
-        # *within* an opted-in cookbook library (e.g. "hardest"/"quick"/
-        # "easy" in _MAX_KEYWORDS/_STEP_KEYWORDS still misfire on an
-        # ordinary in-book question) - that's recipe_extraction.py's
-        # keyword-list precision, a separate, still-open gap.
+        # earlier ingest. interpret_aggregate_query() itself now also
+        # requires the query to say "recipe" explicitly, closing the
+        # narrower within-a-cookbook false positive this comment used to
+        # describe (a bare "quickest"/"hardest" misrouting an ordinary
+        # in-book question) - see its docstring for the remaining, still-
+        # open edge case ("Is this recipe easy to make?" says "recipe" but
+        # isn't comparing across the book).
         aggregate_plan = interpret_aggregate_query(query) if library.config.enable_recipe_extraction else None
         if aggregate_plan is not None:
             return self._answer_aggregate_query(query, plan, aggregate_plan, library)
