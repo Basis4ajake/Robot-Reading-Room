@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-08 (eval-history: user-defined regression questions, run for real, kept as history)
+
+### Added
+- Per-library evaluation: `EvalCase` (a user-authored question + expected keyword), `EvalResult` (one case's outcome), and `EvalRun` (a full pass, persisted to history) in `models.py`; `evaluation.py`'s `run_evaluation()` runs every stored case through the real `GroundedQA.answer_query` pipeline - the same retrieval, reranking, and answer generation chat uses, not a separate code path like `scripts/eval_retrieval.py`'s raw-retrieval check.
+- Each `EvalResult` records two independent pass/fail signals rather than one: `keyword_in_citations` (checked against the actually-retrieved evidence - the real regression signal, since retrieval is what has silently broken repeatedly in this project) and `keyword_in_answer` (checked against the free-form LLM answer text - a real quality signal, but too noisy to be the headline, since a correct answer can rephrase away the exact keyword).
+- Each `EvalRun` stamps the config it executed under (`chunk_size`/`chunk_overlap`/`top_k`/`llm_model`/`embedding_model`), since two runs' pass counts are only comparable if you know whether settings changed between them - the whole point of keeping history instead of a single last-run result.
+- New API endpoints under `/api/v1/libraries/{id}`: `GET`/`POST /eval-cases`, `DELETE /eval-cases/{eval_case_id}`, `POST /evaluate`, `GET /eval-runs` (newest first). `evaluate` holds `AppState.use_runtime()` for the whole run (can be minutes, not the single-question duration chat holds it for) so the config it stamps on the run is actually stable for the run's full duration, not a lie if a PATCH landed mid-run.
+- History is capped at the 50 most recent runs per library (oldest trimmed first) so `eval_runs.json` can't grow unbounded from repeated manual runs.
+- GUI: an "Evaluation" section per library (question/keyword form, case list, "Run Evaluation" button, and an expandable, newest-first run history table showing both pass signals and the full answer text per case).
+
+### Fixed
+- Real, previously-undiscovered bug found building this feature: `GroundedQA.answer_query`'s aggregate-query routing (`interpret_aggregate_query`) matched on bare superlative words ("longest", "highest", "most", "easiest", ...) with no check that the library was even a cookbook, so an ordinary question like "What is the longest river in the world?" against *any* library got silently misrouted into a recipe-only refusal ("This library doesn't have recipe data extracted yet...") instead of a real grounded answer - confirmed for real: it's exactly the kind of question `scripts/eval_retrieval.py`'s own test corpus uses, which only avoided the bug by calling `retriever.semantic_search()` directly instead of the real chat pipeline. Fixed by gating aggregate-query interception on `library.config.enable_recipe_extraction` - a library that never opted into recipe extraction has no aggregate facts to answer from in the first place, so it should never intercept a query at all. Verified two ways: a new `test_qa.py` regression test, and a real end-to-end run against live Ollama via the new eval feature itself (a "longest river" question against a non-recipe library now answers correctly instead of refusing). Checked against this machine's real persisted libraries (`003`, `sdf`, `demo-library`) - none currently have `enable_recipe_extraction` on or any recipe facts, so this fix changes no existing library's behavior today. Scope note: this closes cross-library leakage (a non-cookbook library never should have been intercepted at all) but does NOT fix bare-substring false positives *within* an opted-in cookbook library - `_MAX_KEYWORDS`/`_STEP_KEYWORDS` still contain words like "hardest"/"quick"/"easy" that can misfire on an ordinary in-book question once recipe extraction is enabled; that's a separate, still-open gap in `recipe_extraction.py`'s keyword lists, not touched here.
+
+127/127 tests passing.
+
 ## [Unreleased] - 2026-09-06 (real reranker, RRF fusion, two documented gaps closed)
 
 ### Added

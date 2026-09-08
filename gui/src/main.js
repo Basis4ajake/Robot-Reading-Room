@@ -2,6 +2,7 @@ import { getHealth, getModels } from "./api.js";
 import { initLibraries } from "./libraries.js";
 import { initSources } from "./sources.js";
 import { initChat } from "./chat.js";
+import { initEval } from "./eval.js";
 import { initTooltips } from "./tooltip.js";
 import { initModelSelects } from "./model-select.js";
 import { initTheme } from "./theme.js";
@@ -65,6 +66,7 @@ window.addEventListener("DOMContentLoaded", () => {
   refreshStatus();
   initSources();
   initChat();
+  initEval();
   initLibraries();
   initTooltips();
   initModelSelects();

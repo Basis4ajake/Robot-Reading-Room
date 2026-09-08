@@ -104,3 +104,31 @@ export function sendChatMessage(libraryId, query) {
     body: JSON.stringify({ query }),
   });
 }
+
+export function listEvalCases(libraryId) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/eval-cases`);
+}
+
+export function addEvalCase(libraryId, question, expectedKeyword) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/eval-cases`, {
+    method: "POST",
+    body: JSON.stringify({ question, expected_keyword: expectedKeyword }),
+  });
+}
+
+export function removeEvalCase(libraryId, evalCaseId) {
+  return request(
+    `/libraries/${encodeURIComponent(libraryId)}/eval-cases/${encodeURIComponent(evalCaseId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function runEvaluation(libraryId) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/evaluate`, {
+    method: "POST",
+  });
+}
+
+export function listEvalRuns(libraryId) {
+  return request(`/libraries/${encodeURIComponent(libraryId)}/eval-runs`);
+}

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 
-def _make_id(prefix: str) -> str:
+def make_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex}"
 
 
@@ -322,6 +322,130 @@ class RecipeFact:
             step_count=data.get("step_count", 0),
             source_excerpt=data.get("source_excerpt", ""),
             page_number=data.get("page_number"),
+        )
+
+
+@dataclass
+class EvalCase:
+    """A user-authored regression question for one library (see
+    evaluation.py) - e.g. ("What is the capital of France?", "paris")."""
+
+    eval_case_id: str
+    library_id: str
+    question: str
+    expected_keyword: str
+
+    def to_dict(self) -> Dict:
+        return dataclasses.asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "EvalCase":
+        return cls(
+            eval_case_id=data["eval_case_id"],
+            library_id=data["library_id"],
+            question=data["question"],
+            expected_keyword=data["expected_keyword"],
+        )
+
+
+@dataclass
+class EvalResult:
+    """One case's outcome within an EvalRun. Stores question/expected_keyword
+    by value (not just eval_case_id) so history stays readable even after the
+    case itself is edited or deleted - same reasoning as RecipeFact storing
+    source_excerpt directly rather than a chunk_id.
+
+    Two separate signals, not one, because they catch different failures:
+    - keyword_in_citations checks the actually-retrieved evidence (chunks/
+      pseudo-chunks) - this is the real regression signal, since retrieval
+      is what has silently broken repeatedly in this project.
+    - keyword_in_answer checks the free-form LLM prose, which can rephrase
+      away the exact keyword even when retrieval was correct (e.g. "the
+      river in question" instead of "the Nile") - a real answer-quality
+      signal, but too noisy to be the pass/fail headline on its own.
+    """
+
+    eval_case_id: str
+    question: str
+    expected_keyword: str
+    keyword_in_citations: bool
+    keyword_in_answer: bool
+    answer: str
+    answer_source: str
+    citation_count: int
+
+    def to_dict(self) -> Dict:
+        return dataclasses.asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "EvalResult":
+        return cls(
+            eval_case_id=data["eval_case_id"],
+            question=data["question"],
+            expected_keyword=data["expected_keyword"],
+            keyword_in_citations=data["keyword_in_citations"],
+            keyword_in_answer=data["keyword_in_answer"],
+            answer=data["answer"],
+            answer_source=data["answer_source"],
+            citation_count=data["citation_count"],
+        )
+
+
+@dataclass
+class EvalRun:
+    """One full pass over a library's eval cases, run via the real chat
+    pipeline (GroundedQA.answer_query) so it exercises retrieval, reranking,
+    and answer generation exactly as chat does - not a separate code path.
+
+    Stamps the config the run executed under (chunk_size/chunk_overlap/top_k/
+    llm_model/embedding_model): two runs' pass counts are only comparable if
+    you know whether the library's settings changed between them, which is
+    the whole point of keeping history rather than a single last-run result.
+    """
+
+    eval_run_id: str
+    library_id: str
+    timestamp: str
+    chunk_size: int
+    chunk_overlap: int
+    top_k: int
+    llm_model: str
+    embedding_model: Optional[str]
+    results: List[EvalResult] = field(default_factory=list)
+
+    @property
+    def passed_count(self) -> int:
+        return sum(1 for result in self.results if result.keyword_in_citations)
+
+    @property
+    def total_count(self) -> int:
+        return len(self.results)
+
+    def to_dict(self) -> Dict:
+        return {
+            "eval_run_id": self.eval_run_id,
+            "library_id": self.library_id,
+            "timestamp": self.timestamp,
+            "chunk_size": self.chunk_size,
+            "chunk_overlap": self.chunk_overlap,
+            "top_k": self.top_k,
+            "llm_model": self.llm_model,
+            "embedding_model": self.embedding_model,
+            "results": [result.to_dict() for result in self.results],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "EvalRun":
+        return cls(
+            eval_run_id=data["eval_run_id"],
+            library_id=data["library_id"],
+            timestamp=data["timestamp"],
+            chunk_size=data["chunk_size"],
+            chunk_overlap=data["chunk_overlap"],
+            top_k=data["top_k"],
+            llm_model=data["llm_model"],
+            embedding_model=data.get("embedding_model"),
+            results=[EvalResult.from_dict(entry) for entry in data.get("results", [])],
         )
 
 

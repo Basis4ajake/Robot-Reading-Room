@@ -8,6 +8,8 @@ from typing import Dict, Iterable, List, Optional
 from .models import (
     Citation,
     DocumentMetadata,
+    EvalCase,
+    EvalRun,
     IngestionState,
     LibraryConfig,
     LibraryMetadata,
@@ -15,8 +17,13 @@ from .models import (
     SourceMetadata,
     Chunk,
     compute_path_hash,
+    make_id,
     make_source_id,
 )
+
+# Oldest runs are trimmed once history exceeds this, so eval_runs.json can't
+# grow unbounded from repeated manual "Run Evaluation" clicks.
+_MAX_EVAL_RUNS = 50
 
 
 class KnowledgeLibrary:
@@ -30,6 +37,8 @@ class KnowledgeLibrary:
         self.documents_path = self.library_dir / "documents.json"
         self.chunks_path = self.library_dir / "chunks.json"
         self.recipe_facts_path = self.library_dir / "recipe_facts.json"
+        self.eval_cases_path = self.library_dir / "eval_cases.json"
+        self.eval_runs_path = self.library_dir / "eval_runs.json"
         self.state_path = self.library_dir / "state.json"
         self.index_dir = self.library_dir / "indexes"
         self.index_dir.mkdir(parents=True, exist_ok=True)
@@ -43,6 +52,10 @@ class KnowledgeLibrary:
         self.documents: Dict[str, DocumentMetadata] = {}
         self.chunks: Dict[str, Chunk] = {}
         self.recipe_facts: Dict[str, List[RecipeFact]] = {}
+        self.eval_cases: Dict[str, EvalCase] = {}
+        # Chronological (oldest first) on disk and in memory; list_eval_runs()
+        # reverses for display, since the GUI wants newest-first history.
+        self.eval_runs: List[EvalRun] = []
         self.state = IngestionState(library_id=self.config.library_id)
 
     def remove_document(self, document_id: str) -> None:
@@ -102,6 +115,8 @@ class KnowledgeLibrary:
         library.load_documents()
         library.load_chunks()
         library.load_recipe_facts()
+        library.load_eval_cases()
+        library.load_eval_runs()
         library.load_state()
         return library
 
@@ -146,6 +161,15 @@ class KnowledgeLibrary:
         for document_id, entries in data.items():
             self.recipe_facts[document_id] = [RecipeFact.from_dict(entry) for entry in entries]
 
+    def load_eval_cases(self) -> None:
+        data = self.load_json(self.eval_cases_path, {})
+        for eval_case_id, entry in data.items():
+            self.eval_cases[eval_case_id] = EvalCase.from_dict(entry)
+
+    def load_eval_runs(self) -> None:
+        data = self.load_json(self.eval_runs_path, [])
+        self.eval_runs = [EvalRun.from_dict(entry) for entry in data]
+
     def load_state(self) -> None:
         data = self.load_json(self.state_path, None)
         if data:
@@ -166,6 +190,11 @@ class KnowledgeLibrary:
             self.recipe_facts_path,
             {did: [f.to_dict() for f in facts] for did, facts in self.recipe_facts.items()},
         )
+        self.save_json(
+            self.eval_cases_path,
+            {eid: c.to_dict() for eid, c in self.eval_cases.items()},
+        )
+        self.save_json(self.eval_runs_path, [run.to_dict() for run in self.eval_runs])
         self.save_json(self.state_path, self.state.to_dict())
 
     def add_source(self, source_path: str) -> SourceMetadata:
@@ -206,6 +235,33 @@ class KnowledgeLibrary:
 
     def list_recipe_facts(self) -> List[RecipeFact]:
         return [fact for facts in self.recipe_facts.values() for fact in facts]
+
+    def add_eval_case(self, question: str, expected_keyword: str) -> EvalCase:
+        case = EvalCase(
+            eval_case_id=make_id("eval-case"),
+            library_id=self.config.library_id,
+            question=question,
+            expected_keyword=expected_keyword,
+        )
+        self.eval_cases[case.eval_case_id] = case
+        self.persist()
+        return case
+
+    def list_eval_cases(self) -> List[EvalCase]:
+        return list(self.eval_cases.values())
+
+    def remove_eval_case(self, eval_case_id: str) -> None:
+        if self.eval_cases.pop(eval_case_id, None) is not None:
+            self.persist()
+
+    def register_eval_run(self, run: EvalRun) -> None:
+        self.eval_runs.append(run)
+        if len(self.eval_runs) > _MAX_EVAL_RUNS:
+            self.eval_runs = self.eval_runs[-_MAX_EVAL_RUNS:]
+        self.persist()
+
+    def list_eval_runs(self) -> List[EvalRun]:
+        return list(reversed(self.eval_runs))
 
     def get_chunk(self, chunk_id: str) -> Optional[Chunk]:
         return self.chunks.get(chunk_id)

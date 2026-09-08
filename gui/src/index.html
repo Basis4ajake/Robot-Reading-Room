@@ -216,6 +216,28 @@
 
             <p id="chat-error-msg" class="error" hidden></p>
           </section>
+
+          <section id="eval-section" hidden>
+            <div class="status-header">
+              <h3>
+                Evaluation
+                <button class="info-tip" data-tooltip="Define your own regression questions for this library (a question plus a keyword you expect a correct answer to contain), then run them for real against the library's current content and settings. Runs are kept as history so you can see whether a chunking/model change made answers better or worse over time."></button>
+              </h3>
+              <button type="button" id="run-eval-btn">Run Evaluation</button>
+            </div>
+
+            <form id="eval-case-form" class="chat-form">
+              <input id="eval-question-input" type="text" placeholder="Question, e.g. What is the capital of France?" autocomplete="off" required />
+              <input id="eval-keyword-input" type="text" placeholder="Expected keyword, e.g. paris" autocomplete="off" required />
+              <button type="submit" id="eval-case-submit-btn">Add case</button>
+            </form>
+
+            <ul id="eval-case-list" class="library-list"></ul>
+
+            <div id="eval-run-history"></div>
+
+            <p id="eval-error-msg" class="error" hidden></p>
+          </section>
         </section>
 
         <p id="library-error-msg" class="error" hidden></p>

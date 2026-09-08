@@ -1,7 +1,14 @@
 import tempfile
 from pathlib import Path
 
-from local_knowledge_library.models import DocumentMetadata, LibraryConfig, RecipeFact, StructureMetadata
+from local_knowledge_library.models import (
+    DocumentMetadata,
+    EvalResult,
+    EvalRun,
+    LibraryConfig,
+    RecipeFact,
+    StructureMetadata,
+)
 from local_knowledge_library.storage import KnowledgeLibrary
 
 
@@ -51,3 +58,72 @@ def test_remove_document_clears_its_recipe_facts(tmp_path):
     library.remove_document("doc-1")
 
     assert library.list_recipe_facts() == []
+
+
+def test_eval_cases_persist_and_survive_reopen(tmp_path):
+    config = LibraryConfig(library_id="test-lib", name="Test Library", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    case = library.add_eval_case("What is the capital of France?", "paris")
+
+    reopened = KnowledgeLibrary.open(config)
+    cases = reopened.list_eval_cases()
+    assert len(cases) == 1
+    assert cases[0] == case
+
+
+def test_remove_eval_case(tmp_path):
+    config = LibraryConfig(library_id="test-lib", name="Test Library", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    case = library.add_eval_case("What is the capital of France?", "paris")
+
+    library.remove_eval_case(case.eval_case_id)
+
+    assert library.list_eval_cases() == []
+    reopened = KnowledgeLibrary.open(config)
+    assert reopened.list_eval_cases() == []
+
+
+def _make_run(library_id: str, run_id: str, timestamp: str) -> EvalRun:
+    return EvalRun(
+        eval_run_id=run_id,
+        library_id=library_id,
+        timestamp=timestamp,
+        chunk_size=300,
+        chunk_overlap=60,
+        top_k=8,
+        llm_model="qwen2:1.5b",
+        embedding_model="nomic-embed-text",
+        results=[
+            EvalResult(
+                eval_case_id="case-1", question="q", expected_keyword="k",
+                keyword_in_citations=True, keyword_in_answer=True,
+                answer="a", answer_source="llm", citation_count=1,
+            )
+        ],
+    )
+
+
+def test_eval_runs_persist_and_list_newest_first(tmp_path):
+    config = LibraryConfig(library_id="test-lib", name="Test Library", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    library.register_eval_run(_make_run("test-lib", "run-1", "2026-01-01T00:00:00+00:00"))
+    library.register_eval_run(_make_run("test-lib", "run-2", "2026-01-02T00:00:00+00:00"))
+
+    reopened = KnowledgeLibrary.open(config)
+    runs = reopened.list_eval_runs()
+    assert [run.eval_run_id for run in runs] == ["run-2", "run-1"]
+    assert runs[0].passed_count == 1
+    assert runs[0].total_count == 1
+
+
+def test_eval_run_history_trims_oldest_past_cap(tmp_path):
+    config = LibraryConfig(library_id="test-lib", name="Test Library", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    for i in range(55):
+        library.register_eval_run(_make_run("test-lib", f"run-{i}", f"2026-01-01T00:00:{i:02d}+00:00"))
+
+    runs = library.list_eval_runs()
+    assert len(runs) == 50
+    # Newest-first, and the oldest 5 (run-0..run-4) were trimmed.
+    assert runs[0].eval_run_id == "run-54"
+    assert "run-0" not in [run.eval_run_id for run in runs]

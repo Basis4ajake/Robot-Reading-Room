@@ -64,7 +64,9 @@ def _make_qa(library):
 
 
 def test_answer_query_computes_fewest_ingredients_deterministically(tmp_path):
-    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
     library = KnowledgeLibrary.create(config)
     source_file = tmp_path / "cookbook.txt"
     source_file.write_text("placeholder", encoding="utf-8")
@@ -97,7 +99,9 @@ def test_answer_query_computes_fewest_ingredients_deterministically(tmp_path):
 
 
 def test_answer_query_lists_all_tied_recipes(tmp_path):
-    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
     library = KnowledgeLibrary.create(config)
     library.register_recipe_facts("doc-1", [
         RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
@@ -120,7 +124,9 @@ def test_answer_query_adds_a_caveat_for_a_wide_tie(tmp_path):
     ingredient/step count - implausible for real recipes, and a sign of the
     small extraction model under-counting rather than genuine equality. A
     wide tie should say so instead of presenting the list as precise."""
-    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
     library = KnowledgeLibrary.create(config)
     library.register_recipe_facts("doc-1", [
         RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
@@ -139,7 +145,9 @@ def test_answer_query_gives_distinct_citation_ids_for_same_titled_recipes(tmp_pa
     """A real book has two different recipes both titled "BISCUIT" - their
     citation_id/chunk_id must not collide just because they share a
     document_id and recipe_name, or the GUI can't tell them apart."""
-    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
     library = KnowledgeLibrary.create(config)
     library.register_recipe_facts("doc-1", [
         RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
@@ -162,7 +170,9 @@ def test_answer_query_gives_distinct_citation_ids_for_same_titled_recipes(tmp_pa
 
 
 def test_answer_query_refuses_cost_questions_honestly(tmp_path):
-    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
     library = KnowledgeLibrary.create(config)
     library.register_recipe_facts("doc-1", [
         RecipeFact(library_id="test-lib", source_id="src-1", document_id="doc-1",
@@ -179,7 +189,9 @@ def test_answer_query_refuses_cost_questions_honestly(tmp_path):
 
 
 def test_answer_query_handles_missing_recipe_data_gracefully(tmp_path):
-    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    config = LibraryConfig(
+        library_id="test-lib", name="Test", data_dir=str(tmp_path), enable_recipe_extraction=True
+    )
     library = KnowledgeLibrary.create(config)
 
     qa = _make_qa(library)
@@ -206,3 +218,26 @@ def test_answer_query_ignores_plain_ingredient_mentions_without_superlative(tmp_
     result = qa.answer_query("What ingredients are in the risotto?", library=library, top_k=1)
 
     assert result["answer"].startswith("This is a dummy response")
+
+
+def test_answer_query_ignores_superlatives_when_recipe_extraction_disabled(tmp_path):
+    """interpret_aggregate_query() matches bare superlative words ("longest",
+    "highest", "most", ...) with no recipe-specific requirement at all - a
+    real, non-hypothetical library (e.g. a geography book, or this
+    project's own scripts/eval_retrieval.py-style test corpus) asking
+    "What is the longest river in the world?" must not be misrouted into a
+    recipe-only refusal just because it never turned recipe extraction on."""
+    config = LibraryConfig(library_id="test-lib", name="Test", data_dir=str(tmp_path))
+    library = KnowledgeLibrary.create(config)
+    chunk = Chunk(
+        chunk_id="chunk-1", library_id="test-lib", source_id="source-1", document_id="doc-1",
+        text="The Nile is the longest river in the world.", metadata={"page_number": "1"},
+        citation_id="cite-1",
+    )
+    library.register_chunk(chunk)
+
+    qa = _make_qa(library)
+    result = qa.answer_query("What is the longest river in the world?", library=library, top_k=1)
+
+    assert result["answer_source"] != "computed"
+    assert "doesn't have recipe data" not in result["answer"]

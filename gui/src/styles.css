@@ -336,6 +336,12 @@ button.danger {
   border-top: 1px solid #eee;
 }
 
+#eval-section {
+  margin-top: 1.5em;
+  padding-top: 1.5em;
+  border-top: 1px solid #eee;
+}
+
 .badge {
   padding: 0.2em 0.6em;
   border-radius: 999px;
@@ -343,6 +349,55 @@ button.danger {
   font-weight: 500;
   background-color: #fff4d6;
   color: #8a6100;
+}
+
+.badge-pass {
+  background-color: #e1f5e1;
+  color: #1f6d1f;
+}
+
+.badge-fail {
+  background-color: #fde3e3;
+  color: #a11d1d;
+}
+
+.eval-run {
+  margin-top: 0.75em;
+  padding: 0.5em 0;
+  border-bottom: 1px solid #eee;
+}
+
+.eval-run:last-child {
+  border-bottom: none;
+}
+
+.eval-run summary {
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.eval-run summary .badge {
+  margin-right: 0.5em;
+}
+
+.eval-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75em;
+  font-size: 0.85em;
+}
+
+.eval-result-table th,
+.eval-result-table td {
+  text-align: left;
+  padding: 0.4em 0.6em;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+.eval-result-answer {
+  color: #666;
+  white-space: pre-wrap;
 }
 
 .chat-log {
@@ -474,9 +529,36 @@ button.danger {
     border-top-color: #4a4a4a;
   }
 
+  #eval-section {
+    border-top-color: #4a4a4a;
+  }
+
   .badge {
     background-color: #4a3c00;
     color: #ffd670;
+  }
+
+  .badge-pass {
+    background-color: #1f3d1f;
+    color: #9adf9a;
+  }
+
+  .badge-fail {
+    background-color: #4a1f1f;
+    color: #ff9a9a;
+  }
+
+  .eval-run {
+    border-bottom-color: #4a4a4a;
+  }
+
+  .eval-result-table th,
+  .eval-result-table td {
+    border-bottom-color: #4a4a4a;
+  }
+
+  .eval-result-answer {
+    color: #bbb;
   }
 
   .chat-entry {
@@ -695,8 +777,35 @@ button.danger {
 }
 
 [data-theme="bendy"] #sources-section,
-[data-theme="bendy"] #chat-section {
+[data-theme="bendy"] #chat-section,
+[data-theme="bendy"] #eval-section {
   border-top: 2px solid var(--bt-ink);
+}
+
+[data-theme="bendy"] .eval-run {
+  border-bottom: 2px solid var(--bt-ink);
+}
+
+[data-theme="bendy"] .eval-result-table th,
+[data-theme="bendy"] .eval-result-table td {
+  border-bottom: 2px solid var(--bt-ink);
+  font-family: "Space Mono", monospace;
+}
+
+[data-theme="bendy"] .eval-result-answer {
+  color: var(--bt-body);
+}
+
+[data-theme="bendy"] .badge-pass {
+  background-color: var(--bt-green);
+  color: var(--bt-cream);
+  border: 2px solid var(--bt-ink);
+}
+
+[data-theme="bendy"] .badge-fail {
+  background-color: var(--bt-red-fill);
+  color: var(--bt-cream);
+  border: 2px solid var(--bt-ink);
 }
 
 [data-theme="bendy"] .library-form label {
