@@ -288,3 +288,31 @@ def test_interpret_aggregate_query_flags_cost_as_unanswerable():
 def test_interpret_aggregate_query_returns_none_for_plain_lookup():
     assert interpret_aggregate_query("What ingredients are in the risotto recipe?") is None
     assert interpret_aggregate_query("How do I make gnocchi?") is None
+
+
+def test_interpret_aggregate_query_requires_a_recipe_anchor():
+    """A bare superlative word anywhere in an ordinary in-book question used
+    to be enough to trigger the cross-recipe aggregate path, even when
+    nothing was actually asking to compare recipes - real false positives
+    found via the eval-history feature: "quickest"/"easy" are in
+    _MIN_KEYWORDS, "hardest" is in _MAX_KEYWORDS, both plausible words in an
+    ordinary cooking-technique question that has nothing to do with picking
+    a recipe."""
+    assert interpret_aggregate_query("What's the quickest way to knead this dough?") is None
+    assert interpret_aggregate_query("What's the hardest step in this method?") is None
+    assert interpret_aggregate_query("Is this an easy technique to learn?") is None
+
+
+def test_interpret_aggregate_query_requires_a_recipe_anchor_for_cost_too():
+    """The cost-refusal branch had the same gap - an ordinary question using
+    a cost word but never asking to compare recipes should not get the
+    cross-recipe cost refusal either."""
+    assert interpret_aggregate_query("How much does saffron cost historically?") is None
+
+
+def test_interpret_aggregate_query_still_detects_recipe_anchored_superlatives():
+    """The anchor requirement must not regress the real cases it's meant to
+    keep working."""
+    plan = interpret_aggregate_query("What's the quickest recipe in this book?")
+    assert plan.answerable is True
+    assert plan.direction == "min"

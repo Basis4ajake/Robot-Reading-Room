@@ -249,8 +249,25 @@ def interpret_aggregate_query(query: str) -> Optional[AggregateQueryPlan]:
     "steps" with no superlative (e.g. "what ingredients are in the risotto?")
     must NOT be misrouted here; those words only pick which metric to use
     once a superlative has already been detected.
+
+    Also requires the query to say "recipe" explicitly. Without this, a bare
+    superlative word anywhere in an ordinary in-book question - e.g. "What's
+    the quickest way to knead this dough?" ("quickest" is in _MIN_KEYWORDS)
+    or "What's the hardest step in this method?" ("hardest" is in
+    _MAX_KEYWORDS) - got misrouted into a cross-recipe aggregate answer even
+    though nothing was actually asking to compare recipes. Every real
+    aggregate question seen so far, including this project's own motivating
+    test case ("which recipe uses the fewest ingredients"), says "recipe"
+    explicitly; a query that doesn't just falls through to normal retrieval
+    instead, which is the safe default. Known remaining gap, not fixed here:
+    a query like "Is this recipe easy to make?" still says "recipe" while
+    asking about ONE specific recipe, not comparing across the book - telling
+    those apart needs more than a keyword check.
     """
     lower = query.strip().lower()
+
+    if "recipe" not in lower:
+        return None
 
     if any(keyword in lower for keyword in _COST_KEYWORDS):
         return AggregateQueryPlan(answerable=False, reason="cost_not_tracked")

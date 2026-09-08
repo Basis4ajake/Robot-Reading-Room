@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2026-09-08 (aggregate-query superlative anchor: closes the within-cookbook false positive)
+
+### Fixed
+- `interpret_aggregate_query()` (`recipe_extraction.py`) now requires the query to say "recipe" explicitly before matching any superlative (`_MIN_KEYWORDS`/`_MAX_KEYWORDS`) or cost keyword. **Supersedes the caveat in the entry directly below this one**, which shipped this same day and left this exact case open: within a library that HAS `enable_recipe_extraction` on, an ordinary in-book question containing a bare superlative word - e.g. "What's the quickest way to knead this dough?" ("quickest"/"quick" are in `_MIN_KEYWORDS`) or "What's the hardest step in this method?" ("hardest" is in `_MAX_KEYWORDS`) - was still getting misrouted into the cross-recipe aggregate answer path even though nothing was asking to compare recipes. Every real aggregate question this project has ever used, including its own original Phase 6 motivating example ("which recipe uses the fewest ingredients"), already says "recipe," so this closes the false-positive class with no loss of real coverage - confirmed by running the full pre-existing aggregate-query test suite unchanged. Genuinely still open, narrower: "Is this recipe easy to make?" says "recipe" but asks about one specific recipe, not a cross-book comparison - telling those apart needs more than a keyword check, not attempted here.
+- Worth noting for anyone debugging eval-history results (see the entry below): an eval case phrased without "recipe" (e.g. "which dish has the fewest ingredients") now correctly falls through to normal top-k retrieval instead of the computed aggregate path, and will likely show as a FAIL in run history against a cookbook library. That's correct behavior given the anchor, not a bug - but a puzzling row without this context.
+
+131/131 tests passing.
+
 ## [Unreleased] - 2026-09-08 (eval-history: user-defined regression questions, run for real, kept as history)
 
 ### Added
